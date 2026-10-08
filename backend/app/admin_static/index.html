@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>Branch Visit · Super Admin</title>
+<style>
+:root{
+  color-scheme: light only;
+  --bg:#f4f6fb; --card:#ffffff; --line:#e6e9f2; --ink:#0f172a; --mut:#64748b; --soft:#94a3b8;
+  --pri:#2563eb; --pri-ink:#1d4ed8; --pri-soft:#eff6ff;
+  --ok:#10b981; --ok-soft:#ecfdf5; --ok-ink:#047857;
+  --warn:#f59e0b; --warn-soft:#fffbeb; --warn-ink:#b45309;
+  --bad:#ef4444; --bad-soft:#fef2f2; --bad-ink:#b91c1c;
+  --cyan:#06b6d4; --cyan-soft:#ecfeff; --cyan-ink:#0e7490;
+  --side:#0b1220; --side-ink:#94a3b8; --side-on:#e2e8f0;
+  --r:14px; --shadow:0 1px 2px rgba(15,23,42,.05),0 4px 16px rgba(15,23,42,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+html{color-scheme:light only;background:var(--bg)}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45}
+
+/* Belt & braces against browser auto-dark-mode inversions (black-on-black UI):
+   every core surface and text color is pinned explicitly. */
+.login-wrap,.login,.card,.mbox,table,th,td,.stat,.toast,.inp,.tabs{color-scheme:light only}
+.login{background:#ffffff !important;color:#0f172a !important}
+.login h1{color:#0f172a !important}
+.login .sub{color:#64748b !important}
+.login .inp{background:#ffffff !important;color:#0f172a !important;border:1px solid #e6e9f2 !important}
+.login label.lb{color:#334155 !important}
+body{background:#f4f6fb !important;color:#0f172a !important}
+button{font:inherit;cursor:pointer;border:none;background:none}
+input,select,textarea{font:inherit;color:var(--ink)}
+a{color:var(--pri);text-decoration:none}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px;border:2px solid var(--bg)}
+
+/* ---------- shell ---------- */
+.shell{display:flex;min-height:100vh}
+.side{width:236px;background:var(--side);color:var(--side-ink);position:fixed;top:0;bottom:0;left:0;display:flex;flex-direction:column;z-index:40;transition:transform .25s}
+.brand{display:flex;align-items:center;gap:10px;padding:18px 18px 14px;color:#fff}
+.brand .logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:17px}
+.brand b{font-size:15px;letter-spacing:.2px}
+.brand span{display:block;font-size:10.5px;color:var(--side-ink);font-weight:600;letter-spacing:.8px}
+.nav{flex:1;padding:6px 10px;overflow:auto}
+.nav .grp{font-size:10.5px;font-weight:700;letter-spacing:1.2px;color:#475569;margin:14px 10px 6px}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border-radius:10px;color:var(--side-ink);font-weight:600;font-size:13.5px;margin-bottom:2px;text-align:left}
+.nav button:hover{background:#1e293b;color:#fff}
+.nav button.on{background:var(--pri);color:#fff}
+.nav .ic{width:20px;text-align:center;font-size:15px}
+.side .foot{padding:12px;border-top:1px solid #1e293b}
+.side .me{display:flex;align-items:center;gap:10px;padding:8px 6px}
+.avatar{width:34px;height:34px;border-radius:50%;background:#334155;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0}
+.side .me .nm{color:#e2e8f0;font-weight:600;font-size:13px;line-height:1.2}
+.side .me .rl{font-size:11px;color:var(--side-ink)}
+.btn-out{width:100%;margin-top:8px;padding:8px;border-radius:10px;background:#1e293b;color:#cbd5e1;font-weight:600;font-size:12.5px}
+.btn-out:hover{background:#334155;color:#fff}
+
+.main{flex:1;margin-left:236px;display:flex;flex-direction:column;min-width:0}
+.top{position:sticky;top:0;z-index:30;background:rgba(244,246,251,.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 24px;display:flex;align-items:center;gap:14px}
+.burger{display:none;font-size:18px;color:var(--mut);padding:4px 8px;border-radius:8px}
+.burger:hover{background:#e9edf5}
+.crumb{font-weight:700;font-size:16px}
+.crumb small{display:block;font-weight:500;color:var(--mut);font-size:12px}
+.top .sp{flex:1}
+.pill{background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--mut)}
+.content{padding:22px 24px 60px;max-width:1280px;width:100%;margin:0 auto}
+
+/* ---------- primitives ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.pad{padding:18px}
+.grid{display:grid;gap:14px}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:1080px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.g4,.g3,.g2{grid-template-columns:1fr}}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 15px;border-radius:10px;font-weight:700;font-size:13px;transition:filter .15s, transform .05s;white-space:nowrap}
+.btn:active{transform:translateY(1px)}
+.btn-p{background:var(--pri);color:#fff}.btn-p:hover{filter:brightness(1.08)}
+.btn-s{background:#fff;border:1px solid var(--line);color:#334155}.btn-s:hover{background:#f8fafc}
+.btn-d{background:var(--bad);color:#fff}.btn-d:hover{filter:brightness(1.08)}
+.btn-g{background:var(--ok);color:#fff}.btn-g:hover{filter:brightness(1.05)}
+.btn-sm{padding:6px 10px;font-size:12px;border-radius:8px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.inp,select.inp,textarea.inp{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:13.5px;outline:none;transition:border .15s, box-shadow .15s}
+.inp:focus{border-color:var(--pri);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+label.lb{display:block;font-size:12px;font-weight:700;color:var(--mut);margin:12px 0 5px;letter-spacing:.2px}
+.lb .req{color:var(--bad)}
+.frm{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+@media(max-width:560px){.frm{grid-template-columns:1fr}}
+.frm .full{grid-column:1/-1}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11.5px;font-weight:700;letter-spacing:.2px}
+.b-ip{background:var(--warn-soft);color:var(--warn-ink)}
+.b-sb{background:var(--cyan-soft);color:var(--cyan-ink)}
+.b-done{background:var(--ok-soft);color:var(--ok-ink)}
+.b-grey{background:#f1f5f9;color:#475569}
+.b-red{background:var(--bad-soft);color:var(--bad-ink)}
+.b-blue{background:var(--pri-soft);color:var(--pri-ink)}
+.b-purple{background:#f5f3ff;color:#6d28d9}
+.tablewrap{overflow:auto;border-radius:var(--r)}
+table{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--mut);text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);background:#fafbfe;white-space:nowrap}
+td{padding:12px 14px;border-bottom:1px solid #eef1f7;vertical-align:middle}
+tr.rowbtn{cursor:pointer;transition:background .12s}
+tr.rowbtn:hover{background:#f8fafc}
+tr:last-child td{border-bottom:none}
+.mono{font-variant-numeric:tabular-nums}
+.mut{color:var(--mut)}.soft{color:var(--soft)}.small{font-size:12px}
+.b{font-weight:700}
+.prog{display:flex;align-items:center;gap:8px;min-width:120px}
+.prog .tr{flex:1;height:6px;background:#e9edf5;border-radius:4px;overflow:hidden}
+.prog .fl{height:100%;background:var(--pri);border-radius:4px}
+.prog .fl.ok{background:var(--ok)}
+.empty{text-align:center;padding:46px 20px;color:var(--mut)}
+.empty .e{font-size:34px;margin-bottom:8px}
+.empty p{margin:4px 0 14px}
+.sk{position:relative;overflow:hidden;background:#e9edf5;border-radius:8px}
+.sk::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent);animation:sh 1.3s infinite}
+@keyframes sh{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+.skrow{height:14px;margin:10px 14px}
+.section-t{display:flex;align-items:center;gap:10px;margin:26px 0 12px}
+.section-t h3{font-size:15px}
+.section-t .ln{flex:1;height:1px;background:var(--line)}
+
+/* stat cards */
+.stat{background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:16px;display:flex;align-items:center;gap:13px;cursor:pointer;transition:transform .12s, box-shadow .12s;text-align:left;width:100%}
+.stat:hover{transform:translateY(-2px);box-shadow:0 6px 22px rgba(15,23,42,.10)}
+.stat .ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+.stat .v{font-size:23px;font-weight:800;line-height:1.1}
+.stat .l{font-size:12px;color:var(--mut);font-weight:600;margin-top:2px}
+.stat .arr{margin-left:auto;color:var(--soft);font-size:16px}
+
+/* bar rows */
+.bar-row{display:flex;align-items:center;gap:10px;margin:9px 0}
+.bar-row .bl{width:120px;font-size:12.5px;font-weight:600;color:#334155;flex-shrink:0}
+.bar-row .tr{flex:1;height:8px;background:#eef1f7;border-radius:5px;overflow:hidden}
+.bar-row .fl{height:100%;border-radius:5px}
+.bar-row .bv{width:34px;text-align:right;font-weight:700;font-size:12.5px}
+
+/* thumbs */
+.thumbs{display:flex;flex-wrap:wrap;gap:8px}
+.thumbs img{width:74px;height:74px;object-fit:cover;border-radius:10px;border:1px solid var(--line);cursor:zoom-in;transition:transform .12s;background:#eef1f7}
+.thumbs img:hover{transform:scale(1.04)}
+
+/* modal */
+.ovl{position:fixed;inset:0;background:rgba(10,15,30,.5);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;overflow:auto;animation:fade .15s}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.mbox{background:#fff;border-radius:16px;width:100%;max-width:560px;box-shadow:0 20px 60px rgba(0,0,0,.25);animation:pop .18s}
+.mbox.wide{max-width:760px}
+@keyframes pop{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
+.mhead{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)}
+.mhead h3{font-size:15.5px}
+.mx{font-size:18px;color:var(--soft);padding:2px 8px;border-radius:8px}
+.mx:hover{background:#f1f5f9;color:var(--ink)}
+.mbody{padding:6px 20px 20px;max-height:70vh;overflow:auto}
+.mfoot{display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--line);background:#fafbfe;border-radius:0 0 16px 16px}
+
+/* toasts */
+.toasts{position:fixed;bottom:22px;right:22px;z-index:200;display:flex;flex-direction:column;gap:9px}
+.toast{background:#0f172a;color:#fff;padding:11px 16px;border-radius:12px;font-weight:600;font-size:13px;box-shadow:0 8px 26px rgba(0,0,0,.28);display:flex;gap:9px;align-items:center;animation:pop .2s;max-width:360px}
+.toast.ok{background:#065f46}.toast.err{background:#991b1b}
+.toast .tdot{width:8px;height:8px;border-radius:50%;background:#34d399;flex-shrink:0}
+.toast.err .tdot{background:#fca5a5}
+
+/* lightbox (named to avoid collision with label.lb) */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:300;display:flex;flex-direction:column;padding:20px;animation:fade .15s}
+.lightbox .lbt{display:flex;justify-content:space-between;color:#e2e8f0;font-weight:600}
+.lightbox img{flex:1;min-height:0;object-fit:contain;border-radius:10px;margin:12px 0}
+.lightbox .lbc{color:#94a3b8;font-size:12.5px;text-align:center}
+
+/* login */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(1000px 500px at 20% -10%,#dbeafe 0%,transparent 60%),radial-gradient(900px 500px at 110% 110%,#ede9fe 0%,transparent 55%),var(--bg);padding:20px}
+.login{width:100%;max-width:400px;background:#fff;border-radius:20px;box-shadow:0 24px 70px rgba(15,23,42,.14);padding:34px}
+.login .lg{width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:25px;margin:0 auto 14px}
+.login h1{font-size:19px;text-align:center}
+.login .sub{text-align:center;color:var(--mut);font-size:13px;margin:6px 0 20px}
+.err-b{background:var(--bad-soft);border:1px solid #fecaca;color:var(--bad-ink);padding:10px 12px;border-radius:10px;font-size:13px;font-weight:600;margin-bottom:12px}
+
+.tabs{display:flex;gap:6px;background:#e9edf5;padding:4px;border-radius:11px;width:fit-content;flex-wrap:wrap}
+.tabs button{padding:7px 14px;border-radius:8px;font-weight:700;font-size:12.5px;color:var(--mut)}
+.tabs button.on{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(15,23,42,.12)}
+
+.klist{display:flex;flex-direction:column;gap:10px}
+.secbox{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.secbox .shead{display:flex;align-items:center;gap:10px;background:#fafbfe;padding:11px 14px;border-bottom:1px solid var(--line)}
+.secbox .sbody{padding:6px 0}
+.itemrow{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-bottom:1px solid #f1f5f9}
+.itemrow:last-child{border-bottom:none}
+.itemrow .nm{font-weight:600;font-size:13.5px}
+.itemrow .ds{font-size:12px;color:var(--mut);margin-top:2px}
+.chip{display:inline-block;background:#f1f5f9;color:#475569;border-radius:6px;padding:2px 7px;font-size:10.5px;font-weight:700;margin-right:4px}
+.tgl{position:relative;width:36px;height:20px;background:#cbd5e1;border-radius:999px;transition:background .15s;flex-shrink:0}
+.tgl::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.tgl.on{background:var(--ok)}
+.tgl.on::after{left:18px}
+
+@media(max-width:900px){
+  .side{transform:translateX(-100%)}
+  .side.open{transform:none}
+  .main{margin-left:0}
+  .burger{display:block}
+  .content{padding:16px 14px 60px}
+}
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="loginView" class="login-wrap" style="display:none">
+  <div class="login">
+    <div class="lg">🧭</div>
+    <h1>Branch Visit · Super Admin</h1>
+    <div class="sub">Sign in to manage branches, users, checklists &amp; visits</div>
+    <div id="loginErr"></div>
+    <label class="lb">Email</label>
+    <input id="lgEmail" class="inp" type="email" placeholder="admin@company.com" autocomplete="username">
+    <label class="lb">Password</label>
+    <input id="lgPass" class="inp" type="password" placeholder="••••••••" autocomplete="current-password">
+    <button id="lgBtn" class="btn btn-p" style="width:100%;justify-content:center;margin-top:18px;padding:12px">Sign In</button>
+  </div>
+</div>
+
+<!-- ================= SHELL ================= -->
+<div id="shell" class="shell" style="display:none">
+  <aside class="side" id="side">
+    <div class="brand"><div class="logo">🧭</div><div><b>Branch Visit</b><span>SUPER ADMIN</span></div></div>
+    <nav class="nav" id="nav">
+      <div class="grp">Overview</div>
+      <button data-r="#/dashboard"><span class="ic">📊</span>Dashboard</button>
+      <div class="grp">Operations</div>
+      <button data-r="#/visits"><span class="ic">🧭</span>Visits</button>
+      <button data-r="#/photos"><span class="ic">🖼️</span>Photo Evidence</button>
+      <button data-r="#/actions"><span class="ic">🛠️</span>Corrective Actions</button>
+      <div class="grp">Management</div>
+      <button data-r="#/branches"><span class="ic">🏢</span>Branches</button>
+      <button data-r="#/checklists"><span class="ic">📋</span>Checklists</button>
+      <button data-r="#/users"><span class="ic">👥</span>Users</button>
+      <div class="grp">System</div>
+      <button data-r="#/audit"><span class="ic">📝</span>Audit Trail</button>
+      <div style="flex:1"></div>
+      <button data-r="#/danger" id="navDanger" style="color:#dc2626"><span class="ic">⚠️</span>Vanish Data</button>
+    </nav>
+    <div class="foot">
+      <div class="me"><div class="avatar" id="meAv">?</div><div><div class="nm" id="meNm">—</div><div class="rl" id="meRl"></div></div></div>
+      <button class="btn-out" id="logoutBtn">Sign out</button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="top">
+      <button class="burger" id="burger">☰</button>
+      <div class="crumb" id="crumb">Dashboard</div>
+      <div class="sp"></div>
+      <div class="pill" id="netPill">● live</div>
+    </div>
+    <div class="content" id="app"></div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+<div id="modalRoot"></div>
+
+<script>
+/* Global safety net: any unexpected error shows a visible message instead of
+   a silent blank page. */
+window.addEventListener("error", function(e){
+  var el = document.getElementById("fatalBox");
+  if (!el){
+    el = document.createElement("div");
+    el.id = "fatalBox";
+    el.style.cssText = "position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:9999;background:#991b1b;color:#fff;padding:12px 18px;border-radius:12px;font:600 13px sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.3);max-width:90vw";
+    document.body.appendChild(el);
+  }
+  el.textContent = "⚠️ " + (e.message || "Unexpected error") + " — press Ctrl+Shift+R to reload";
+  setTimeout(function(){ el.remove(); }, 8000);
+});
+</script>
+
+<script>
+/* ============================================================
+   Branch Visit · Super Admin console
+   Single-file app served by the FastAPI backend at /admin.
+   ============================================================ */
+"use strict";
+
+const API = "/api/v1";
+let TOKEN = sessionStorage.getItem("bv_token") || null;
+let ME = null;
+
+const $ = (s, el) => (el || document).querySelector(s);
+const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const app = () => $("#app");
+
+function fmtDate(s){ if(!s) return "—"; const d = new Date(s); return isNaN(d) ? "—" : d.toLocaleDateString(undefined,{day:"2-digit",month:"short",year:"numeric"}); }
+function fmtDT(s){ if(!s) return "—"; const d = new Date(s); return isNaN(d) ? "—" : d.toLocaleString(undefined,{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}); }
+function fmtRel(s){ if(!s) return "—"; const d=new Date(s), m=Math.round((Date.now()-d)/60000);
+  if(m<1) return "just now"; if(m<60) return m+"m ago"; const h=Math.round(m/60); if(h<24) return h+"h ago";
+  const dd=Math.round(h/24); if(dd<30) return dd+"d ago"; return fmtDate(s); }
+function initials(n){ return (n||"?").split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase(); }
+
+/* ---------- status buckets (3-bucket model, same as mobile) ---------- */
+const BUCKETS = {
+  DRAFT:["In Progress","b-ip"], ASSIGNED:["In Progress","b-ip"], SCHEDULED:["In Progress","b-ip"],
+  IN_PROGRESS:["In Progress","b-ip"], REWORK_REQUIRED:["In Progress","b-ip"], RESUBMITTED:["In Progress","b-ip"], REJECTED:["In Progress","b-ip"],
+  SUBMITTED:["Submitted","b-sb"], UNDER_REVIEW:["Submitted","b-sb"],
+  APPROVED:["Completed","b-done"], CLOSED:["Completed","b-done"], CANCELLED:["Completed","b-done"],
+};
+const IN_P = Object.keys(BUCKETS).filter(k=>BUCKETS[k][0]==="In Progress");
+const DONE = ["APPROVED","CLOSED","CANCELLED"];
+function sBadge(st){ const b=BUCKETS[st]||["—","b-grey"]; return `<span class="badge ${b[1]}">${esc(b[0])}</span>`; }
+
+/* ---------- api ---------- */
+async function api(path, opts = {}, retry = true){
+  const headers = { ...(opts.headers||{}) };
+  if (TOKEN) headers["Authorization"] = "Bearer " + TOKEN;
+  if (opts.body && !(opts.body instanceof Blob)) headers["Content-Type"] = "application/json";
+  let res;
+  try {
+    res = await fetch(API + path, { ...opts, headers });
+  } catch(e){
+    if (retry) { await new Promise(r=>setTimeout(r,800)); return api(path, opts, false); }
+    throw new Error("Network error — is the server running?");
+  }
+  if (res.status === 401){
+    if (retry && TOKEN) { const ok = await tryRefresh(); if (ok) return api(path, opts, false); }
+    TOKEN = null; sessionStorage.removeItem("bv_token"); showLogin();
+    throw new Error("Session expired — please sign in again.");
+  }
+  if (!res.ok){
+    let detail = res.statusText;
+    try { const j = await res.json(); detail = typeof j.detail==="string" ? j.detail : (Array.isArray(j.detail)? j.detail.map(d=>d.msg).join(", ") : JSON.stringify(j.detail)); } catch{}
+    throw new Error(detail);
+  }
+  if (res.status === 204) return null;
+  const ct = res.headers.get("content-type")||"";
+  return ct.includes("json") ? res.json() : res.blob();
+}
+async function tryRefresh(){
+  try {
+    const r = await fetch(API+"/auth/refresh",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:TOKEN})});
+    if(!r.ok) return false;
+    const j = await r.json(); TOKEN = j.access_token; sessionStorage.setItem("bv_token",TOKEN); return true;
+  } catch { return false; }
+}
+
+/* ---------- toasts / modals / confirm ---------- */
+function toast(msg, type="ok"){
+  const t = document.createElement("div");
+  t.className = "toast "+type;
+  t.innerHTML = `<span class="tdot"></span><span>${esc(msg)}</span>`;
+  $("#toasts").appendChild(t);
+  setTimeout(()=>{ t.style.opacity="0"; t.style.transition="opacity .3s"; setTimeout(()=>t.remove(),320); }, 3400);
+}
+function modal(html, wide){
+  const root = $("#modalRoot");
+  const ovl = document.createElement("div");
+  ovl.className="ovl";
+  ovl.innerHTML = `<div class="mbox ${wide?"wide":""}">${html}</div>`;
+  const close = () => { ovl.remove(); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if(e.key==="Escape") close(); };
+  ovl.addEventListener("mousedown", e => { if(e.target===ovl) close(); });
+  document.addEventListener("keydown", onKey);
+  root.appendChild(ovl);
+  $(".mx", ovl).onclick = close;
+  return { el: ovl, close };
+}
+function confirmDlg(title, msg, okLabel="Delete"){
+  return new Promise(resolve => {
+    const m = modal(`
+      <div class="mhead"><h3>${esc(title)}</h3><button class="mx">✕</button></div>
+      <div class="mbody"><p style="padding:6px 0 10px;color:#334155">${esc(msg)}</p></div>
+      <div class="mfoot"><button class="btn btn-s" data-x="c">Cancel</button><button class="btn btn-d" data-x="o">${esc(okLabel)}</button></div>`);
+    m.el.querySelector('[data-x="c"]').onclick = ()=>{ m.close(); resolve(false); };
+    m.el.querySelector('[data-x="o"]').onclick = ()=>{ m.close(); resolve(true); };
+    m.el.querySelector(".mx").onclick = ()=>{ m.close(); resolve(false); };
+  });
+}
+function formModal(title, fields, onSubmit, submitLabel="Save", wide){
+  // fields: [{k,label,type,req,opts(full|async),val,ph,full,min,max,hint}]
+  const m = modal(`
+    <div class="mhead"><h3>${esc(title)}</h3><button class="mx">✕</button></div>
+    <div class="mbody"><div class="frm" id="fmF"></div><div class="err-b" id="fmErr" style="display:none;margin-top:12px"></div></div>
+    <div class="mfoot"><button class="btn btn-s" data-x="c">Cancel</button><button class="btn btn-p" id="fmGo">${esc(submitLabel)}</button></div>`, wide);
+  const box = $("#fmF", m.el);
+  fields.forEach(f=>{
+    const wrap = document.createElement("div");
+    if (f.full) wrap.className="full";
+    const req = f.req ? ' <span class="req">*</span>' : "";
+    let ctl = "";
+    if (f.type==="select"){
+      ctl = `<select class="inp" data-k="${f.k}">${(f.opts||[]).map(o=>`<option value="${esc(o.v)}" ${String(o.v)===String(f.val)?"selected":""}>${esc(o.l)}</option>`).join("")}</select>`;
+    } else if (f.type==="textarea"){
+      ctl = `<textarea class="inp" data-k="${f.k}" rows="3" placeholder="${esc(f.ph||"")}">${esc(f.val??"")}</textarea>`;
+    } else if (f.type==="checkbox"){
+      wrap.innerHTML = `<label class="lb" style="margin-top:14px">&nbsp;</label>`;
+      ctl = `<label style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;padding:8px 0"><input type="checkbox" data-k="${f.k}" ${f.val?"checked":""}> ${esc(f.ph||f.label)}</label>`;
+      wrap.appendChild(document.createRange().createContextualFragment(ctl));
+      if (f.hint) wrap.insertAdjacentHTML("beforeend", `<div class="small soft">${esc(f.hint)}</div>`);
+      box.appendChild(wrap); return;
+    } else {
+      ctl = `<input class="inp" data-k="${f.k}" type="${f.type||"text"}" value="${esc(f.val??"")}" placeholder="${esc(f.ph||"")}" ${f.min?`min="${f.min}"`:""} ${f.max?`max="${f.max}"`:""}>`;
+    }
+    wrap.insertAdjacentHTML("beforeend", `<label class="lb" ${f.full?'style="margin-top:12px"':""}>${esc(f.label)}${req}</label>`+ctl+(f.hint?`<div class="small soft" style="margin-top:3px">${esc(f.hint)}</div>`:""));
+    box.appendChild(wrap);
+  });
+  m.el.querySelector('[data-x="c"]').onclick = m.close;
+  m.el.querySelector(".mx").onclick = m.close;
+  $("#fmGo", m.el).onclick = async ()=>{
+    const data = {};
+    let missing = null;
+    $$("[data-k]", box).forEach(el=>{
+      data[el.dataset.k] = el.type==="checkbox" ? el.checked : el.value.trim();
+      if (!missing && el.dataset.req==="1" && !data[el.dataset.k]) missing = el.dataset.label||el.dataset.k;
+    });
+    fields.forEach(f=>{ if(f.req && (data[f.k]===""||data[f.k]==null)) missing = f.label; });
+    const err = $("#fmErr", m.el);
+    if (missing){ err.style.display="block"; err.textContent = "Please fill: "+missing; return; }
+    const btn = $("#fmGo", m.el); btn.disabled = true; btn.textContent = "Saving…";
+    try { await onSubmit(data); m.close(); }
+    catch(e){ err.style.display="block"; err.textContent = e.message||String(e); btn.disabled=false; btn.textContent=submitLabel; }
+  };
+  return m;
+}
+
+/* ---------- lightbox ---------- */
+function lightbox(src, title, sub, canDelete, onDelete){
+  const el = document.createElement("div");
+  el.className="lightbox";
+  el.innerHTML = `
+    <div class="lbt"><span>${esc(title||"Photo")}</span><span style="display:flex;gap:14px">
+      ${canDelete?`<button class="btn btn-d btn-sm" id="lbDel">🗑 Delete</button>`:""}
+      <button class="btn btn-s btn-sm" id="lbX">✕ Close</button></span></div>
+    <img src="${esc(src)}" alt="">
+    <div class="lbc">${esc(sub||"")}</div>`;
+  el.querySelector("#lbX").onclick = ()=>el.remove();
+  el.addEventListener("mousedown", e=>{ if(e.target===el) el.remove(); });
+  const onKey = e=>{ if(e.key==="Escape") el.remove(); document.removeEventListener("keydown",onKey); };
+  document.addEventListener("keydown", onKey);
+  if (canDelete) el.querySelector("#lbDel").onclick = async ()=>{
+    el.remove(); if (await confirmDlg("Delete photo?","This photo will be permanently removed.")) onDelete && onDelete();
+  };
+  document.body.appendChild(el);
+}
+// The API already returns full paths (e.g. /api/v1/photos/{id}/file) — do NOT
+// add the prefix again (double prefix = 404 = broken thumbnails).
+const pUrl = (p, thumb) => (thumb ? (p.thumbnail_url || p.url) : (p.url || p.thumbnail_url)) + "?t=" + String(p.id || "").slice(0, 8);
+
+/* ---------- shell / nav / routing ---------- */
+const ROUTES = [
+  [/^#\/dashboard$/,            () => viewDashboard(), "Dashboard"],
+  [/^#\/visits(\?.*)?$/,        () => viewVisits(qs()), "Visits"],
+  [/^#\/visits\/([\w-]+)$/,     m => viewVisit(m[1]), "Visit"],
+  [/^#\/photos(\?.*)?$/,        () => viewPhotos(qs()), "Photo Evidence"],
+  [/^#\/actions(\?.*)?$/,       m => viewActions(qs()), "Corrective Actions"],
+  [/^#\/branches(\?.*)?$/,      () => viewBranches(qs()), "Branches"],
+  [/^#\/branches\/([\w-]+)$/,   m => viewBranch(m[1]), "Branch"],
+  [/^#\/organization$/,         () => nav("#/branches"), "Branches"],
+  [/^#\/checklists$/,           () => viewChecklists(), "Checklists"],
+  [/^#\/checklists\/([\w-]+)$/, m => viewTemplate(m[1]), "Checklist Template"],
+  [/^#\/users$/,                () => viewUsers(), "Users"],
+  [/^#\/audit$/,                () => viewAudit(), "Audit Trail"],
+  [/^#\/danger$/,               () => viewDanger(), "Vanish Data"],
+];
+function qs(){ const h=location.hash||"#/dashboard"; const i=h.indexOf("?"); if(i<0) return {}; return Object.fromEntries(new URLSearchParams(h.slice(i+1))); }
+function nav(hash){ location.hash = hash; }
+
+window.addEventListener("hashchange", route);
+
+// Event delegation: stat cards (+ any [data-nav]) navigate even if a re-render
+// momentarily leaves a stale handler behind. Belt-and-braces for clickability.
+document.addEventListener("click", e => {
+  const t = e.target.closest("button.stat, [data-nav]");
+  if (!t) return;
+  const onclick = t.getAttribute && t.getAttribute("onclick");
+  if (onclick) {
+    const m = onclick.match(/nav\('([^']+)'/);
+    if (m && location.hash !== m[1]) { e.preventDefault(); nav(m[1]); }
+  }
+});
+$("#nav").addEventListener("click", e=>{
+  const b = e.target.closest("button[data-r]"); if(!b) return;
+  nav(b.dataset.r);
+  $("#side").classList.remove("open");
+});
+$("#burger").onclick = ()=> $("#side").classList.toggle("open");
+$("#logoutBtn").onclick = ()=>{ TOKEN=null; sessionStorage.removeItem("bv_token"); showLogin(); };
+
+function setCrumb(t, sub){ $("#crumb").innerHTML = `${esc(t)}${sub?`<small>${esc(sub)}</small>`:""}`; }
+function markNav(hash){
+  const base = "#/"+(hash.replace(/^#\//,"").split(/[/?]/)[0]||"dashboard");
+  $$("#nav button").forEach(b=> b.classList.toggle("on", b.dataset.r.startsWith(base) && (base!=="#/branches" || b.dataset.r==="#/branches")));
+}
+function skeleton(rows=6){ return `<div class="card">${Array.from({length:rows},()=>'<div class="skrow sk"></div>').join("")}</div>`; }
+
+async function route(){
+  if (!TOKEN){ showLogin(); return; }
+  const h = location.hash || "#/dashboard";
+  markNav(h);
+  for (const [re, fn, title] of ROUTES){
+    const m = h.match(re);
+    if (m){
+      setCrumb(title);
+      app().innerHTML = skeleton();
+      try { await fn(m); }
+      catch(e){ app().innerHTML = `<div class="card pad empty"><div class="e">⚠️</div><b>${esc(e.message)}</b><p>The request failed.</p><button class="btn btn-p" onclick="route()">Retry</button></div>`; }
+      return;
+    }
+  }
+  nav("#/dashboard");
+}
+
+/* ---------- auth views ---------- */
+function showLogin(){
+  $("#shell").style.display="none";
+  $("#loginView").style.display="flex";
+  $("#lgEmail").focus();
+}
+$("#lgBtn").onclick = doLogin;
+$("#lgPass").addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
+$("#lgEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#lgPass").focus(); });
+async function doLogin(){
+  const em = $("#lgEmail").value.trim(), pw = $("#lgPass").value;
+  const err = $("#loginErr"); err.innerHTML="";
+  if (!em || !pw){ err.innerHTML = `<div class="err-b">Enter email and password.</div>`; return; }
+  const btn = $("#lgBtn"); btn.disabled = true; btn.textContent = "Signing in…";
+  try {
+    const r = await api("/auth/login", { method:"POST", body: JSON.stringify({ email: em, password: pw }) });
+    TOKEN = r.access_token; sessionStorage.setItem("bv_token", TOKEN);
+    ME = await api("/users/me");
+    boot();
+  } catch(e){
+    err.innerHTML = `<div class="err-b">${esc(e.message)}</div>`;
+    btn.disabled=false; btn.textContent="Sign In";
+  }
+}
+async function boot(){
+  $("#loginView").style.display="none";
+  $("#shell").style.display="flex";
+  if (!ME){ try { ME = await api("/users/me"); } catch{ return; } }
+  $("#meNm").textContent = [ME.first_name, ME.last_name].filter(Boolean).join(" ") || ME.email;
+  $("#meRl").textContent = (ME.roles||[]).map(r=>r.name||r).join(", ") || "member";
+  $("#meAv").textContent = initials($("#meNm").textContent);
+  if (!location.hash || location.hash==="#/") nav("#/dashboard"); else route();
+}
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+async function viewDashboard(){
+  const [dash, summary] = await Promise.all([
+    api("/dashboard"),
+    api("/dashboard/mobile-summary").catch(()=>null),
+  ]);
+  const totals = {};
+  (dash.cards||[]).forEach(c=> totals[c.key]=c.value );
+  const done = totals.all_done ?? 0;
+
+  const statCard = (ic, tint, label, v, route) => `
+    <button class="stat" onclick="nav('${route}')">
+      <div class="ic" style="background:${tint}">${ic}</div>
+      <div><div class="v">${v}</div><div class="l">${esc(label)}</div></div>
+      <div class="arr">›</div>
+    </button>`;
+
+  const chkCards = summary ? `
+    ${statCard("🏢","#eff6ff","Branches",summary.total_branches,"#/branches")}
+    ${statCard("📋","#f5f3ff","Checklist Items",summary.total_checklists,"#/checklists")}
+    ${statCard("✅","#ecfdf5","Completed Items",summary.completed_checklists,"#/checklists")}
+    ${statCard("⏳","#fffbeb","Pending Items",summary.pending_checklists,"#/checklists")}` : "";
+
+  const bar = (label,v,max,color)=>`<div class="bar-row"><div class="bl">${esc(label)}</div><div class="tr"><div class="fl" style="width:${max?Math.min(100,v/max*100):0}%;background:${color}"></div></div><div class="bv">${v}</div></div>`;
+
+  const maxBr = Math.max(1,...(dash.visits_by_branch||[]).map(x=>x.value));
+  const maxRg = Math.max(1,...(dash.visits_by_region||[]).map(x=>x.value));
+  const recent = (dash.recent_visits||[]).slice(0,8);
+
+  // Branches first (the entry point), then visit status buckets.
+  app().innerHTML = `
+    <div class="grid g4">${statCard("🏢","#eff6ff","Branches",summary?.total_branches??0,"#/branches")}</div>
+    <div class="grid g4" style="margin-top:14px">${statCard("🧭","#eff6ff","Total Visits",totals.total_visits??0,"#/visits")}
+    ${statCard("⏳","#fffbeb","In Progress",totals.in_progress??0,"#/visits?bucket=in_progress")}
+    ${statCard("📤","#ecfeff","Submitted",totals.submitted??0,"#/visits?bucket=submitted")}
+    ${statCard("✅","#ecfdf5","Completed",done,"#/visits?bucket=done")}</div>
+    ${summary?`<div class="grid g4" style="margin-top:14px">${statCard("📋","#f5f3ff","Checklist Items",summary.total_checklists,"#/checklists")}
+    ${statCard("✅","#ecfdf5","Completed Items",summary.completed_checklists,"#/checklists")}
+    ${statCard("⏳","#fffbeb","Pending Items",summary.pending_checklists,"#/checklists")}</div>`:""}
+
+    <div class="grid g3" style="margin-top:18px">
+      <div class="card pad">
+        <h3 style="font-size:14.5px;margin-bottom:10px">Visits by branch <span class="small soft">· top 10</span></h3>
+        ${(dash.visits_by_branch||[]).length ? (dash.visits_by_branch||[]).map(x=>bar(x.label,x.value,maxBr,"#2563eb")).join("") : '<div class="empty" style="padding:18px">No data yet</div>'}
+      </div>
+      <div class="card pad">
+        <h3 style="font-size:14.5px;margin-bottom:10px">Visits by region</h3>
+        ${(dash.visits_by_region||[]).length ? (dash.visits_by_region||[]).map(x=>bar(x.label,x.value,maxRg,"#7c3aed")).join("") : '<div class="empty" style="padding:18px">No data yet</div>'}
+      </div>
+      <div class="card pad">
+        <h3 style="font-size:14.5px;margin-bottom:10px">Compliance by region</h3>
+        ${(dash.compliance_by_region||[]).length ? (dash.compliance_by_region||[]).map(x=>bar(x.label,x.value,100,x.value>=80?"#10b981":x.value>=50?"#f59e0b":"#ef4444")).join("") : '<div class="empty" style="padding:18px">No data yet</div>'}
+      </div>
+    </div>
+
+    <div class="section-t"><h3>Recent visits</h3><div class="ln"></div><button class="btn btn-s btn-sm" onclick="nav('#/visits')">View all →</button></div>
+    <div class="card tablewrap"><table>
+      <thead><tr><th>Branch</th><th>Type</th><th>Status</th><th>Visit date</th><th>Compliance</th></tr></thead>
+      <tbody>${recent.length ? recent.map(v=>`
+        <tr class="rowbtn" onclick="nav('#/visits/${v.id}')">
+          <td><b>${esc(v.branch||"—")}</b></td>
+          <td>${esc(v.visit_type||"—")}</td>
+          <td>${sBadge(v.status)}</td>
+          <td class="small mut">${fmtDate(v.scheduled_date)}</td>
+          <td class="mono">${v.compliance_percentage!=null?`<b style="color:${v.compliance_percentage>=80?"#10b981":v.compliance_percentage>=50?"#f59e0b":"#ef4444"}">${v.compliance_percentage}%</b>`:"—"}</td>
+        </tr>`).join("") : `<tr><td colspan="5"><div class="empty">No visits yet — they will appear here as soon as someone starts one.</div></td></tr>`}
+      </tbody></table></div>`;
+}
+
+/* ============================================================
+   BRANCHES
+   ============================================================ */
+async function viewBranches(q){
+  const [overview, regions] = await Promise.all([
+    api("/dashboard/branch-overview").catch(()=>[]),
+    api("/branches/regions").catch(()=>[]),
+  ]);
+  const search = (q.q || "").toLowerCase();
+  const regionFilter = q.region || "";
+  const list = (overview||[]).filter(b =>
+    (!search || b.name.toLowerCase().includes(search) || (b.code||"").toLowerCase().includes(search) || (b.city||"").toLowerCase().includes(search)) &&
+    (!regionFilter || b.region === regionFilter));
+
+  const roleBadge = r => {
+    const colors = {ADMIN:"#2563eb", HR:"#7c3aed", OPS:"#0891b2", OTHERS:"#64748b"};
+    return `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:${colors[r]||"#e2e8f0"}1a;color:${colors[r]||"#475569"}">${esc(r)}</span>`;
+  };
+
+  app().innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+      <input id="bq" class="inp" style="max-width:260px" placeholder="Search branch or city…" value="${esc(q.q||"")}">
+      <select id="breg" class="inp" style="max-width:170px">
+        <option value="">All regions</option>
+        ${(regions||[]).map(r=>`<option value="${esc(r.name)}" ${regionFilter===r.name?"selected":""}>${esc(r.name)}</option>`).join("")}
+      </select>
+      <div style="flex:1"></div>
+      <button class="btn btn-p" id="addLoc">＋ Add</button>
+    </div>
+    ${list.length ? `<div class="grid g3">
+      ${list.map(b=>`
+        <div class="card pad rowbtn" style="cursor:pointer" onclick="nav('#/branches/${b.id}')">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:42px;height:42px;border-radius:12px;background:#eff6ff;display:flex;align-items:center;justify-content:center;font-size:20px">🏢</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700">${esc(b.name)}</div>
+              <div class="small soft">${esc(b.code)}${b.city?" · "+esc(b.city):""}${b.region?" · "+esc(b.region):""}</div>
+            </div>
+            ${b.compliance!=null?`<div style="text-align:right"><div style="font-weight:800;font-size:17px;color:${b.compliance>=80?"#10b981":b.compliance>=50?"#f59e0b":"#ef4444"}">${b.compliance}%</div><div class="small soft">compliance</div></div>`:""}
+          </div>
+          <div style="display:flex;gap:14px;margin-top:12px;padding-top:10px;border-top:1px solid #f1f5f9">
+            <div style="text-align:center"><div style="font-weight:800">${b.total_visits}</div><div class="small soft">visits</div></div>
+            <div style="text-align:center"><div style="font-weight:800;color:#f59e0b">${b.in_progress}</div><div class="small soft">progress</div></div>
+            <div style="text-align:center"><div style="font-weight:800;color:#0891b2">${b.submitted}</div><div class="small soft">submitted</div></div>
+            <div style="text-align:center"><div style="font-weight:800;color:#10b981">${b.completed}</div><div class="small soft">completed</div></div>
+          </div>
+          <div style="margin-top:10px" class="small soft">Roles with checklist here: ${b.roles&&b.roles.length?b.roles.map(roleBadge).join(" "):'<span class="chip">ALL ROLES</span>'}</div>
+        </div>`).join("")}
+    </div>`
+    : `<div class="card empty"><div class="e">🏢</div><b>No branches yet</b><p>Add your first branch — it takes one field.</p><button class="btn btn-p" id="addLocEmpty">＋ Add Branch / Region / Area</button></div>`}`;
+
+  const openAdd = () => quickAddForm(()=>viewBranches(qs()));
+  $("#addLoc").onclick = openAdd;
+  const e0 = $("#addLocEmpty"); if (e0) e0.onclick = openAdd;
+  $("#bq").addEventListener("keydown", e=>{ if(e.key==="Enter") nav("#/branches?q="+encodeURIComponent(e.target.value)+(regionFilter?`&region=${encodeURIComponent(regionFilter)}`:"")); });
+  $("#breg").onchange = e=> nav("#/branches"+(q.q?`?q=${encodeURIComponent(q.q)}&region=${encodeURIComponent(e.target.value)}`:`?region=${encodeURIComponent(e.target.value)}`));
+}
+
+function quickAddForm(onDone){
+  formModal("Add Branch / Region / Area", [
+    {k:"type",label:"What are you adding?",req:1,type:"select",val:"branch",opts:[{v:"branch",l:"🏢 Branch"},{v:"region",l:"🌍 Region"},{v:"area",l:"📍 Area"}],full:1},
+    {k:"name",label:"Name",req:1,ph:"e.g. Mumbai Andheri",full:1},
+    {k:"region_id",label:"Region (for Area/Branch)",type:"select",opts:[],hint:"create a region first if the list is empty"},
+    {k:"city",label:"City (optional)",ph:"e.g. Mumbai",full:1},
+    {k:"state",label:"State (optional)",ph:"e.g. Maharashtra",full:1},
+  ], async d=>{
+    const body = { type:d.type, name:d.name, city:d.city||null, state:d.state||null };
+    if (d.region_id) body.region_id = d.region_id;
+    await api("/branches/quick-add",{method:"POST",body:JSON.stringify(body)});
+    toast((d.type==="region"?"Region":d.type==="area"?"Area":"Branch")+" added");
+    onDone();
+  }, "Add", true);
+  // populate the region select after the modal renders
+  api("/branches/regions").then(rs=>{
+    const sel = document.querySelector('.modal select[k="region_id"], select[name="region_id"]');
+    if (sel) {
+      sel.innerHTML = '<option value="">— pick or leave empty —</option>' + rs.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join("");
+    }
+  }).catch(()=>{});
+}
+function branchForm(existing, regions, areas, onDone){
+  const isEdit = !!existing;
+  formModal(isEdit?"Edit Branch":"Add Branch", [
+    {k:"name",label:"Branch name",req:1,val:existing?.name},
+    {k:"code",label:"Branch code",req:isEdit?0:1,val:existing?.code,ph:"e.g. MUM-01"},
+    {k:"region_id",label:"Region",req:isEdit?0:1,type:"select",val:existing?.region_id,opts:regions.map(r=>({v:r.id,l:r.name}))},
+    {k:"area_id",label:"Area",req:isEdit?0:1,type:"select",val:existing?.area_id,opts:areas.map(a=>({v:a.id,l:a.name}))},
+    {k:"branch_type",label:"Branch type",type:"select",val:existing?.branch_type||"STANDALONE",opts:[{v:"STANDALONE",l:"Standalone"},{v:"WAREHOUSE",l:"Warehouse"},{v:"OFFICE",l:"Office"},{v:"FACTORY",l:"Factory"}]},
+    {k:"city",label:"City",val:existing?.city},
+    {k:"state",label:"State",val:existing?.state},
+    {k:"pincode",label:"Pincode",val:existing?.pincode},
+    {k:"address",label:"Address",type:"textarea",val:existing?.address,full:1},
+  ], async d=>{
+    if (isEdit){
+      const {name,code,region_id,area_id,branch_type,...rest} = d;
+      await api(`/branches/${existing.id}`, {method:"PATCH", body:JSON.stringify({...rest, name: d.name})});
+      toast("Branch updated");
+    } else {
+      if (!regions.length) throw new Error("No regions yet — create one under Organization first.");
+      await api("/branches", {method:"POST", body:JSON.stringify(d)});
+      toast("Branch created");
+    }
+    onDone();
+  }, isEdit?"Save Changes":"Create Branch", true);
+}
+async function editBranch(id){
+  const [branches, regions, areas] = await Promise.all([api("/branches"),api("/branches/regions").catch(()=>[]),api("/branches/areas").catch(()=>[])]);
+  branchForm(branches.find(b=>b.id===id), regions, areas, ()=>route());
+}
+
+async function viewBranch(id){
+  const [b, visits] = await Promise.all([
+    api(`/branches/${id}`),
+    api("/visits").then(vs=>vs.filter(v=>v.branch_id===id)).catch(()=>[]),
+  ]);
+  app().innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+      <button class="btn btn-s btn-sm" onclick="nav('#/branches')">← Branches</button>
+      <h2 style="font-size:19px">${esc(b.name)} <span class="mut" style="font-weight:600;font-size:13px">· ${esc(b.code)}</span></h2>
+      ${b.is_active?'<span class="badge b-done">Active</span>':'<span class="badge b-grey">Inactive</span>'}
+      <div style="flex:1"></div>
+      <button class="btn btn-s" id="ebtn">✏️ Edit</button>
+      ${b.is_active?`<button class="btn btn-d" id="dbtn">Deactivate</button>`:`<button class="btn btn-g" id="abtn">Activate</button>`}
+    </div>
+    <div class="grid g4">
+      <div class="stat" style="cursor:default"><div class="ic" style="background:#eff6ff">🧭</div><div><div class="v">${b.total_visits??0}</div><div class="l">Total visits</div></div></div>
+      <div class="stat" style="cursor:default"><div class="ic" style="background:#ecfdf5">📊</div><div><div class="v">${b.average_compliance??0}%</div><div class="l">Avg compliance</div></div></div>
+      <div class="stat" style="cursor:default"><div class="ic" style="background:#fffbeb">🛠️</div><div><div class="v">${b.open_actions??0}</div><div class="l">Open actions</div></div></div>
+      <div class="stat" style="cursor:default"><div class="ic" style="background:#fef2f2">🚨</div><div><div class="v">${b.overdue_actions??0}</div><div class="l">Overdue actions</div></div></div>
+    </div>
+    <div class="card pad" style="margin-top:14px">
+      <div class="grid g2 small" style="color:#475569">
+        <div><b>Address:</b> ${esc(b.address||"—")}</div>
+        <div><b>City / State:</b> ${esc([b.city,b.state].filter(Boolean).join(", ")||"—")} ${b.pincode?`· ${esc(b.pincode)}`:""}</div>
+      </div>
+    </div>
+    <div class="section-t"><h3>Visits at this branch</h3><div class="ln"></div></div>
+    <div class="card tablewrap"><table>
+      <thead><tr><th>Type</th><th>Status</th><th>Progress</th><th>Compliance</th><th>Date</th></tr></thead>
+      <tbody>${visits.length ? visits.map(v=>`
+        <tr class="rowbtn" onclick="nav('#/visits/${v.id}')">
+          <td><b>${esc(v.visit_type_name||"—")}</b></td><td>${sBadge(v.status)}</td>
+          <td><div class="prog"><div class="tr"><div class="fl" style="width:${v.total_items?v.completed_items/v.total_items*100:0}%"></div></div><span class="small mut mono">${v.completed_items}/${v.total_items}</span></div></td>
+          <td class="mono">${v.compliance_percentage!=null?v.compliance_percentage+"%":"—"}</td>
+          <td class="small mut">${fmtDate(v.scheduled_date||v.submitted_at)}</td>
+        </tr>`).join("") : `<tr><td colspan="5"><div class="empty">No visits at this branch yet.</div></td></tr>`}
+      </tbody></table></div>`;
+
+  $("#ebtn").onclick = async ()=>{
+    const [regions, areas] = await Promise.all([api("/branches/regions").catch(()=>[]),api("/branches/areas").catch(()=>[])]);
+    branchForm(b, regions, areas, route);
+  };
+  const tog = async val => {
+    if (await confirmDlg(val?"Activate branch?":"Deactivate branch?", val?"The branch will be selectable again.":"The branch will be hidden from new visits (existing visits are kept).", val?"Activate":"Deactivate")){
+      await api(`/branches/${id}`, {method:"PATCH", body:JSON.stringify({is_active: val})});
+      toast(val?"Branch activated":"Branch deactivated"); route();
+    }
+  };
+  const d = $("#dbtn"); if (d) d.onclick = ()=>tog(false);
+  const a = $("#abtn"); if (a) a.onclick = ()=>tog(true);
+}
+
+/* ============================================================
+   ORGANIZATION (regions + areas)
+   ============================================================ */
+async function viewOrg(){
+  const [regions, areas] = await Promise.all([api("/branches/regions"), api("/branches/areas").catch(()=>[])]);
+  const byRegion = {};
+  areas.forEach(a=>{ (byRegion[a.region_id] = byRegion[a.region_id]||[]).push(a); });
+  app().innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
+      <p class="mut" style="flex:1">Group your branches into <b>regions</b> (e.g. North, South) and <b>areas</b> within them.</p>
+      <button class="btn btn-p" id="addRegion">＋ Add Region</button>
+      <button class="btn btn-s" id="addArea">＋ Add Area</button>
+    </div>
+    ${regions.length ? `<div class="grid g3">${regions.map(r=>`
+      <div class="card pad">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="ic" style="width:40px;height:40px;border-radius:11px;background:#f5f3ff;display:flex;align-items:center;justify-content:center;font-size:17px">🌍</div>
+          <div><b>${esc(r.name)}</b><div class="small soft mono">${esc(r.code)}</div></div>
+        </div>
+        <div style="margin-top:12px">
+          ${(byRegion[r.id]||[]).length ? (byRegion[r.id]||[]).map(a=>`<span class="chip" style="margin:2px 4px 2px 0">📍 ${esc(a.name)}</span>`).join("") : '<span class="small soft">No areas yet</span>'}
+        </div>
+      </div>`).join("")}</div>`
+    : `<div class="card empty"><div class="e">🌍</div><b>No regions yet</b><p>Create your first region to organize branches.</p><button class="btn btn-p" id="addRegionEmpty">＋ Add Region</button></div>`}`;
+
+  const openR = ()=> formModal("Add Region",[
+    {k:"name",label:"Region name",req:1,ph:"e.g. North Region"},
+    {k:"code",label:"Code",req:1,ph:"e.g. NR"},
+  ], async d=>{ await api("/branches/regions",{method:"POST",body:JSON.stringify(d)}); toast("Region created"); route(); },"Create Region");
+  const openA = ()=> {
+    if (!regions.length){ toast("Create a region first","err"); return; }
+    formModal("Add Area",[
+      {k:"name",label:"Area name",req:1,ph:"e.g. Mumbai City"},
+      {k:"code",label:"Code",req:1,ph:"e.g. MBC"},
+      {k:"region_id",label:"Region",req:1,type:"select",opts:regions.map(r=>({v:r.id,l:r.name}))},
+    ], async d=>{ await api("/branches/areas",{method:"POST",body:JSON.stringify(d)}); toast("Area created"); route(); },"Create Area");
+  };
+  $("#addRegion").onclick = openR;
+  $("#addArea").onclick = openA;
+  const e2 = $("#addRegionEmpty"); if (e2) e2.onclick = openR;
+}
+
+/* ============================================================
+   USERS
+   ============================================================ */
+async function viewUsers(){
+  const [users, roles] = await Promise.all([api("/users"), api("/roles").catch(()=>[])]);
+  app().innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
+      <p class="mut" style="flex:1">Everyone who can sign in to the app or this console.</p>
+      <button class="btn btn-p" id="addUser">＋ Add User</button>
+    </div>
+    <div class="card tablewrap"><table>
+      <thead><tr><th>User</th><th>Email</th><th>Phone</th><th>Roles</th><th>Status</th><th></th></tr></thead>
+      <tbody>${users.length ? users.map(u=>{
+        const nm = [u.first_name,u.last_name].filter(Boolean).join(" ");
+        return `
+        <tr>
+          <td><div style="display:flex;align-items:center;gap:10px"><div class="avatar" style="background:#2563eb">${esc(initials(nm||u.email))}</div><b>${esc(nm||"—")}</b></div></td>
+          <td class="small">${esc(u.email)}</td>
+          <td class="small mono">${esc(u.phone||"—")}</td>
+          <td>${(u.roles||[]).length ? (u.roles||[]).map(r=>`<span class="badge b-blue" style="margin:1px 3px 1px 0">${esc(r.name)}</span>`).join("") : '<span class="small soft">—</span>'}</td>
+          <td>${u.is_active?'<span class="badge b-done">Active</span>':'<span class="badge b-grey">Disabled</span>'}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-s btn-sm" onclick='editUser(${JSON.stringify(JSON.stringify({id:u.id,first_name:u.first_name,last_name:u.last_name,phone:u.phone,email:u.email,is_active:u.is_active,role_ids:(u.roles||[]).map(r=>r.id)}))})'>✏️ Edit</button>
+            ${u.email===ME.email?"":`<button class="btn btn-d btn-sm" onclick="deleteUser('${u.id}','${esc(nm||u.email).replace(/'/g,"")}')">🗑</button>`}
+          </td>
+        </tr>`;}).join("") : `<tr><td colspan="6"><div class="empty">No users yet.</div></td></tr>`}
+      </tbody></table></div>`;
+
+  const openAdd = ()=> formModal("Add User",[
+    {k:"first_name",label:"First name",req:1},
+    {k:"last_name",label:"Last name",req:1},
+    {k:"email",label:"Email",req:1,type:"email"},
+    {k:"phone",label:"Phone",type:"tel"},
+    {k:"password",label:"Password",req:1,type:"password",hint:"min 8 characters"},
+    {k:"role_ids",label:"Roles",type:"select",opts:roles.map(r=>({v:r.id,l:r.name}))},
+  ], async d=>{
+    const role_ids = d.role_ids ? [d.role_ids] : [];
+    const {password, role_ids:_r, ...rest} = d;
+    await api("/users",{method:"POST",body:JSON.stringify({...rest, password, role_ids})});
+    toast("User created");
+    route();
+  },"Create User");
+
+  $("#addUser").onclick = openAdd;
+  window.__openAddUser = openAdd;
+}
+window.editUser = async function(jsonStr){
+  const u = JSON.parse(jsonStr);
+  const roles = await api("/roles").catch(()=>[]);
+  formModal("Edit User",[
+    {k:"first_name",label:"First name",req:1,val:u.first_name},
+    {k:"last_name",label:"Last name",req:1,val:u.last_name},
+    {k:"email",label:"Email",req:1,type:"email",val:u.email},
+    {k:"phone",label:"Phone",type:"tel",val:u.phone},
+    {k:"is_active",label:"",type:"checkbox",val:u.is_active,ph:"Account active"},
+    {k:"role_ids",label:"Roles",type:"select",val:u.role_ids[0],opts:[{v:"",l:"— none —"},...roles.map(r=>({v:r.id,l:r.name}))]},
+  ], async d=>{
+    const body = { first_name:d.first_name, last_name:d.last_name, email:d.email, phone:d.phone||null, is_active:d.is_active, role_ids: d.role_ids?[d.role_ids]:[] };
+    await api(`/users/${u.id}`,{method:"PATCH",body:JSON.stringify(body)});
+    toast("User updated"); route();
+  },"Save Changes");
+};
+window.deleteUser = async function(id, nm){
+  if (await confirmDlg("Delete user?", `${nm} will permanently lose access. This cannot be undone.`)){
+    await api(`/users/${id}`,{method:"DELETE"});
+    toast("User deleted"); route();
+  }
+};
+
+/* ============================================================
+   CHECKLISTS (visit types + templates + builder)
+   ============================================================ */
+async function viewChecklists(){
+  const [templates, vtypes] = await Promise.all([api("/checklists/templates"), api("/checklists/visit-types").catch(()=>[])]);
+  const vtName = id => (vtypes.find(v=>v.id===id)||{}).name || "—";
+  app().innerHTML = `
+    <div class="section-t" style="margin-top:0"><h3>Visit types</h3><div class="ln"></div><button class="btn btn-s btn-sm" id="addVt">＋ Add Visit Type</button></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      ${vtypes.length? vtypes.map(v=>`<span class="badge b-purple" style="font-size:12.5px;padding:7px 13px">${esc(v.name)}</span>`).join("") : '<span class="small soft">No visit types yet.</span>'}
+    </div>
+
+    <div class="section-t"><h3>Checklist templates</h3><div class="ln"></div><button class="btn btn-p" id="addTpl">＋ New Template</button></div>
+    ${templates.length ? `<div class="grid g3">${templates.map(t=>{
+      const secs=(t.sections||[]).length, items=(t.sections||[]).reduce((n,s)=>n+(s.items||[]).length,0);
+      return `
+      <div class="card pad" style="cursor:pointer" onclick="nav('#/checklists/${t.id}')">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:40px;height:40px;border-radius:11px;background:#eff6ff;display:flex;align-items:center;justify-content:center;font-size:17px">📋</div>
+          <div style="flex:1;min-width:0"><b>${esc(t.name)}</b><div class="small soft">${esc(t.version)} · ${esc(vtName(t.visit_type_id))}</div></div>
+          ${t.is_published?'<span class="badge b-done">Published</span>':t.is_active?'<span class="badge b-blue">Active</span>':'<span class="badge b-grey">Draft</span>'}
+        </div>
+        <div class="small mut" style="margin-top:12px">📂 ${secs} section${secs===1?"":"s"} · ✅ ${items} item${items===1?"":"s"}</div>
+      </div>`;}).join("")}</div>`
+    : `<div class="card empty"><div class="e">📋</div><b>No templates yet</b><p>Create a checklist template with sections and items.</p><button class="btn btn-p" id="addTplEmpty">＋ New Template</button></div>`}`;
+
+  $("#addVt").onclick = ()=> formModal("Add Visit Type",[
+    {k:"name",label:"Name",req:1,ph:"e.g. Safety Audit"},
+    {k:"description",label:"Description",type:"textarea",full:1},
+  ], async d=>{ await api("/checklists/visit-types",{method:"POST",body:JSON.stringify(d)}); toast("Visit type created"); route(); },"Create");
+
+  const openTpl = ()=> formModal("New Checklist Template",[
+    {k:"name",label:"Template name",req:1,ph:"e.g. HR Visit Checklist"},
+    {k:"version",label:"Version",req:1,val:"v1.0"},
+    {k:"visit_type_id",label:"Visit type",type:"select",full:1,opts:[{v:"",l:"— none —"},...vtypes.map(v=>({v:v.id,l:v.name}))]},
+    {k:"description",label:"Description",type:"textarea",full:1},
+  ], async d=>{
+    if (!d.visit_type_id) delete d.visit_type_id;
+    const r = await api("/checklists/templates",{method:"POST",body:JSON.stringify({...d, sections: []})});
+    toast("Template created — now add sections"); nav("#/checklists/"+r.id);
+  },"Create Template");
+
+  $("#addTpl").onclick = openTpl;
+  const e2 = $("#addTplEmpty"); if (e2) e2.onclick = openTpl;
+}
+
+async function viewTemplate(id){
+  const [t, vtypes] = await Promise.all([api(`/checklists/templates/${id}`), api("/checklists/visit-types").catch(()=>[])]);
+  const vtName = tid => (vtypes.find(v=>v.id===tid)||{}).name || "—";
+
+  const itemRow = it => `
+    <div class="itemrow" data-iid="${it.id}">
+      <div style="flex:1;min-width:0">
+        <div class="nm">${esc(it.name)} ${it.is_required?'<span class="badge b-red" style="font-size:10px">required</span>':""} ${it.is_active?"":'<span class="badge b-grey" style="font-size:10px">inactive</span>'}</div>
+        ${it.description?`<div class="ds">${esc(it.description)}</div>`:""}
+        <div style="margin-top:5px">
+          <span class="chip">📷 ${it.photo_allowed?"photo":"no photo (done-only)"}</span>
+          ${(it.photo_required_on||[]).length?`<span class="chip">req on ${esc(it.photo_required_on.join(","))}</span>`:""}
+          ${(it.remark_required_on||[]).length?`<span class="chip">remark on ${esc(it.remark_required_on.join(","))}</span>`:""}
+          ${(it.action_required_on||[]).length?`<span class="chip">action on ${esc(it.action_required_on.join(","))}</span>`:""}
+          ${(it.role_tags||[]).length?it.role_tags.map(rt=>`<span class="badge b-ip" style="font-size:10px">${esc(rt)}</span>`).join(""):`<span class="badge b-done" style="font-size:10px">ALL ROLES</span>`}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn btn-s btn-sm" onclick="editItem('${it.id}','${t.id}')">✏️</button>
+        ${it.is_active
+          ?`<button class="btn btn-s btn-sm" title="Deactivate" onclick="toggleItem('${it.id}',false,'${t.id}')">🚫</button>`
+          :`<button class="btn btn-g btn-sm" title="Activate" onclick="toggleItem('${it.id}',true,'${t.id}')">↺</button>`}
+      </div>
+    </div>`;
+
+  app().innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+      <button class="btn btn-s btn-sm" onclick="nav('#/checklists')">← Checklists</button>
+      <h2 style="font-size:19px">${esc(t.name)} <span class="mut" style="font-weight:600;font-size:13px">· ${esc(t.version)} · ${esc(vtName(t.visit_type_id))}</span></h2>
+      ${t.is_published?'<span class="badge b-done">Published</span>':t.is_active?'<span class="badge b-blue">Active</span>':'<span class="badge b-grey">Draft</span>'}
+      <div style="flex:1"></div>
+      <button class="btn btn-s" id="dupTpl">⧉ Duplicate as new version</button>
+      <button class="btn btn-s" id="editTpl">✏️ Edit details</button>
+      <button class="btn ${t.is_active?"btn-d":"btn-g"}" id="actTpl">${t.is_active?"Deactivate":"Activate"}</button>
+    </div>
+    ${t.description?`<p class="mut" style="margin:-6px 0 14px">${esc(t.description)}</p>`:""}
+
+    <div class="klist">
+      ${(t.sections||[]).length ? t.sections.map((s,i)=>`
+        <div class="secbox">
+          <div class="shead">
+            <b>${i+1}. ${esc(s.name)}</b>
+            <span class="badge b-grey">${(s.items||[]).length} items</span>
+            <div style="flex:1"></div>
+            <button class="btn btn-s btn-sm" onclick="addItem('${s.id}','${t.id}','${esc(s.name).replace(/'/g,"")}')">＋ Add Item</button>
+          </div>
+          <div class="sbody">${(s.items||[]).length ? s.items.map(itemRow).join("") : '<div class="empty" style="padding:20px">No items in this section yet.</div>'}</div>
+        </div>`).join("")
+      : `<div class="card empty"><div class="e">📂</div><b>No sections yet</b><p>Sections group checklist items (e.g. "Safety", "Documentation").</p></div>`}
+    </div>
+    <div style="margin-top:14px"><button class="btn btn-p" id="addSec">＋ Add Section</button></div>`;
+
+  $("#addSec").onclick = ()=> formModal("Add Section",[
+    {k:"name",label:"Section name",req:1,ph:"e.g. Fire Safety"},
+    {k:"description",label:"Description",type:"textarea",full:1},
+  ], async d=>{
+    const maxOrder = Math.max(-1,...(t.sections||[]).map(s=>s.sort_order??0));
+    await api(`/checklists/templates/${id}/sections`,{method:"POST",body:JSON.stringify({...d, sort_order: maxOrder+1, items: []})});
+    toast("Section added"); route();
+  },"Add Section");
+
+  $("#editTpl").onclick = ()=> formModal("Edit Template",[
+    {k:"name",label:"Name",req:1,val:t.name},
+    {k:"description",label:"Description",type:"textarea",val:t.description,full:1},
+    {k:"is_active",label:"",type:"checkbox",val:t.is_active,ph:"Active (usable for new visits)"},
+    {k:"is_published",label:"",type:"checkbox",val:t.is_published,ph:"Published (locked & live)"},
+  ], async d=>{
+    await api(`/checklists/templates/${id}`,{method:"PATCH",body:JSON.stringify({name:d.name,description:d.description||null,is_active:d.is_active,is_published:d.is_published})});
+    toast("Template updated"); route();
+  },"Save Changes");
+
+  $("#dupTpl").onclick = async ()=>{
+    const nt = await api(`/checklists/templates/${id}/duplicate`,{method:"POST"});
+    toast("Duplicated as draft — edit freely"); nav("#/checklists/"+nt.id);
+  };
+  const act = $("#actTpl");
+  if (act) act.onclick = async ()=>{
+    try {
+      await api(`/checklists/templates/${id}`,{method:"PATCH",body:JSON.stringify({is_active:!t.is_active})});
+      toast(t.is_active?"Template deactivated":"Template activated"); route();
+    } catch(e){ toast(e.message,"err"); }
+  };
+}
+window.addItem = function(sectionId, templateId, secName){
+  formModal(`Add Item — ${secName}`,[
+    {k:"name",label:"Item text",req:1,full:1,ph:"e.g. Fire extinguishers are present & valid"},
+    {k:"description",label:"Guidance / description",type:"textarea",full:1},
+    {k:"photo_allowed",label:"",type:"checkbox",val:true,ph:"Photo required (untick for done-only checkpoints)"},
+    {k:"is_required",label:"",type:"checkbox",val:true,ph:"Item must be answered"},
+    {k:"weight",label:"Weight",type:"number",val:1,hint:"higher weight = more impact on compliance %"},
+  ], async d=>{
+    const payload = { name:d.name, description:d.description||null, photo_allowed:d.photo_allowed, is_required:d.is_required, weight:Number(d.weight)||1 };
+    await api(`/checklists/sections/${sectionId}/items`,{method:"POST",body:JSON.stringify(payload)});
+    toast("Item added"); route();
+  },"Add Item", true);
+};
+window.editItem = async function(itemId, templateId){
+  const t = await api(`/checklists/templates/${templateId}`);
+  let item=null;
+  (t.sections||[]).forEach(s=>(s.items||[]).forEach(i=>{ if(i.id===itemId) item=i; }));
+  if (!item) return;
+  formModal("Edit Item",[
+    {k:"name",label:"Item text",req:1,val:item.name,full:1},
+    {k:"description",label:"Guidance / description",type:"textarea",val:item.description,full:1},
+    {k:"photo_allowed",label:"",type:"checkbox",val:item.photo_allowed,ph:"Photo required (untick for done-only checkpoints)"},
+    {k:"is_required",label:"",type:"checkbox",val:item.is_required,ph:"Item must be answered"},
+    {k:"weight",label:"Weight",type:"number",val:item.weight},
+  ], async d=>{
+    await api(`/checklists/items/${itemId}`,{method:"PATCH",body:JSON.stringify({name:d.name,description:d.description||null,photo_allowed:d.photo_allowed,is_required:d.is_required,weight:Number(d.weight)||1})});
+    toast("Item updated"); route();
+  },"Save Changes", true);
+};
+window.toggleItem = async function(itemId, val, templateId){
+  await api(`/checklists/items/${itemId}`,{method:"PATCH",body:JSON.stringify({is_active:val})});
+  toast(val?"Item activated":"Item deactivated (hidden on new visits)"); route();
+};
+
+/* ============================================================
+   VISITS
+   ============================================================ */
+async function viewVisits(q){
+  const bucket = q.bucket || "", br = q.branch || "", user = q.user || "", search = (q.q||"").toLowerCase();
+  // Server filters branch_id + assigned_to; console filters bucket + search client-side.
+  const params = new URLSearchParams();
+  if (br) params.set("branch_id", br);
+  if (user) params.set("assigned_to", user);
+  params.set("per_page", "200");
+  const [visits, branches, users] = await Promise.all([
+    api(`/visits?${params.toString()}`),
+    api("/branches").catch(()=>[]),
+    api("/users").catch(()=>[]),
+  ]);
+  const list = visits.filter(v=>{
+    if (bucket==="in_progress" && !IN_P.includes(v.status)) return false;
+    if (bucket==="submitted" && v.status!=="SUBMITTED" && v.status!=="UNDER_REVIEW") return false;
+    if (bucket==="done" && !DONE.includes(v.status)) return false;
+    if (search && !((v.branch_name||"")+" "+(v.branch_code||"")+" "+(v.status||"")+" "+(v.visit_type_name||"")+" "+(v.visitors||[]).map(x=>x.name||"").join(" ")).toLowerCase().includes(search)) return false;
+    return true;
+  }).sort((a,b)=> String(b.submitted_at||b.scheduled_date||"").localeCompare(String(a.submitted_at||a.scheduled_date||"")));
+
+  const tab = (id,label)=>`<button class="${(bucket===id)?"on":""}" onclick="nav('#/visits${id?`?bucket=${id}`:""}')">${label}</button>`;
+  const keep = (over)=> `#/visits?${[bucket?`bucket=${bucket}`:"", br?`branch=${br}`:"", user?`user=${user}`:"", over].filter(Boolean).join("&")}`;
+
+  app().innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <div class="tabs">${tab("","All")}${tab("in_progress","In Progress")}${tab("submitted","Submitted")}${tab("done","Completed")}</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <input id="vq" class="inp" style="max-width:230px" placeholder="Search branch, staff, status…" value="${esc(q.q||"")}">
+      <select id="vbr" class="inp" style="max-width:200px">
+        <option value="">All branches</option>
+        ${branches.map(b=>`<option value="${b.id}" ${br===b.id?"selected":""}>${esc(b.name)}</option>`).join("")}
+      </select>
+      <select id="vuser" class="inp" style="max-width:200px">
+        <option value="">All users</option>
+        ${(users||[]).filter(u=>u.is_active).map(u=>`<option value="${u.id}" ${user===u.id?"selected":""}>${esc([u.first_name,u.last_name].filter(Boolean).join(" ")||u.email)}</option>`).join("")}
+      </select>
+      ${(br||user||q.q)?`<button class="btn btn-s btn-sm" onclick="nav('#/visits${bucket?`?bucket=${bucket}`:""}')">✕ Clear filters</button>`:""}
+    </div>
+    <div class="card tablewrap"><table>
+      <thead><tr><th>Branch</th><th>Type</th><th>Done by</th><th>Status</th><th>Progress</th><th>Compliance</th><th>Photos</th><th>Submitted</th></tr></thead>
+      <tbody>${list.length ? list.map(v=>`
+        <tr class="rowbtn" onclick="nav('#/visits/${v.id}')">
+          <td><b>${esc(v.branch_name||"—")}</b><div class="small soft">${esc(v.branch_code||"")}</div></td>
+          <td>${esc(v.visit_type_name||"—")}</td>
+          <td class="small">${(v.visitors||[]).map(x=>esc(x.name||"")).filter(Boolean).join(", ")||"—"}</td>
+          <td>${sBadge(v.status)}</td>
+          <td><div class="prog"><div class="tr"><div class="fl ${v.completed_items>=v.total_items&&v.total_items?"ok":""}" style="width:${v.total_items?v.completed_items/v.total_items*100:0}%"></div></div><span class="small mut mono">${v.completed_items}/${v.total_items}</span></div></td>
+          <td class="mono">${v.compliance_percentage!=null?`<b style="color:${v.compliance_percentage>=80?"#10b981":v.compliance_percentage>=50?"#f59e0b":"#ef4444"}">${v.compliance_percentage}%</b>`:"—"}</td>
+          <td class="mono">📷 ${v.photo_count??0}</td>
+          <td class="small mut">${fmtDT(v.submitted_at)}</td>
+        </tr>`).join("") : `<tr><td colspan="8"><div class="empty"><div class="e">🧭</div><b>No visits match</b><p>Adjust the filters above, or wait — visits from the mobile app appear here instantly.</p></div></td></tr>`}
+      </tbody></table></div>`;
+  $("#vq").addEventListener("keydown", e=>{ if(e.key==="Enter") nav(keep(`q=${encodeURIComponent(e.target.value)}`)); });
+  $("#vbr").onchange = e=> nav(keep(`branch=${e.target.value}`));
+  $("#vuser").onchange = e=> nav(keep(`user=${e.target.value}`));
+}
+
+async function viewVisit(id){
+  const [v, checklist, photos, actions] = await Promise.all([
+    api(`/visits/${id}`),
+    api(`/visits/${id}/checklist`).catch(()=>null),
+    api(`/visits/${id}/photos`).catch(()=>[]),
+    api(`/visits/${id}/actions`).catch(()=>[]),
+  ]);
+  const items = (checklist && checklist.items) || [];
+  const photosBy = {};
+  (photos||[]).forEach(p=>{ const k=p.checklist_item_id||"none"; (photosBy[k]=photosBy[k]||[]).push(p); });
+
+  const bySec = {};
+  items.forEach(it=>{ const s=it.section_name||"Checklist"; (bySec[s]=bySec[s]||[]).push(it); });
+
+  const canReview = v.status === "SUBMITTED" || v.status === "UNDER_REVIEW";
+
+  app().innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="btn btn-s btn-sm" onclick="nav('#/visits')">← Visits</button>
+      <h2 style="font-size:19px">${esc(v.branch_name||"Visit")}</h2>
+      ${sBadge(v.status)}
+      <div style="flex:1"></div>
+      <button class="btn btn-s" id="expBtn">⬇ Export report</button>
+    </div>
+    ${canReview ? `
+    <div class="card pad" style="margin-bottom:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;border-left:4px solid var(--warn)">
+      <div style="flex:1;min-width:220px"><b>Review needed</b><div class="small mut">Check the answers and photos below, then approve to move this visit to Completed — or reject to send it back.</div></div>
+      <button class="btn btn-d" id="rejBtn">✕ Reject</button>
+      <button class="btn btn-g" id="apprBtn">✓ Approve &amp; Complete</button>
+    </div>` : ""}
+    <div class="grid g4">
+      <div class="stat" style="cursor:default"><div class="ic" style="background:#eff6ff">📋</div><div><div class="v">${v.completed_items}/${v.total_items}</div><div class="l">Items answered</div></div></div>
+      <div class="stat" style="cursor:default"><div class="ic" style="background:#ecfdf5">📊</div><div><div class="v">${v.compliance_percentage!=null?v.compliance_percentage+"%":"—"}</div><div class="l">Compliance</div></div></div>
+      <div class="stat" style="cursor:default"><div class="ic" style="background:#ecfeff">📷</div><div><div class="v">${v.photo_count??(photos||[]).length}</div><div class="l">Photos</div></div></div>
+      <div class="stat" style="cursor:default"><div class="ic" style="background:#fffbeb">🛠️</div><div><div class="v">${(actions||[]).length}</div><div class="l">Corrective actions</div></div></div>
+    </div>
+
+    <div class="card pad" style="margin-top:14px">
+      <div class="grid g2 small" style="color:#475569">
+        <div><b>Visit type:</b> ${esc(v.visit_type_name||"—")}</div>
+        <div><b>Visit date:</b> ${fmtDate(v.scheduled_date)}</div>
+        <div><b>Visitors:</b> ${esc((v.visitors||[]).map(x=>x.name||x).join(", ")||"—")}</div>
+        <div><b>Submitted:</b> ${fmtDT(v.submitted_at)}</div>
+        ${v.visitor_notes?`<div class="full" style="grid-column:1/-1"><b>Notes:</b> ${esc(v.visitor_notes)}</div>`:""}
+      </div>
+    </div>
+
+    <div class="section-t"><h3>Checklist</h3><div class="ln"></div><span class="badge b-blue">${v.completed_items}/${v.total_items} answered</span></div>
+    ${items.length ? Object.entries(bySec).map(([sec, arr])=>`
+      <div class="secbox" style="margin-bottom:12px">
+        <div class="shead"><b>${esc(sec)}</b><span class="badge b-grey">${arr.filter(i=>i.status).length}/${arr.length}</span></div>
+        <div class="sbody">${arr.map(it=>{
+          const ips = photosBy[it.id]||[];
+          const st = it.status;
+          const cls = st==="OK"?"b-done":st==="NOT_OK"?"b-red":st?"b-grey":"b-grey";
+          return `
+          <div class="itemrow">
+            <div style="flex:1;min-width:0">
+              <div class="nm">${esc(it.item_name)}</div>
+              <div style="margin-top:5px">
+                ${st?`<span class="badge ${cls}">${esc(st==="NOT_OK"?"NOT OK":st)}</span>`:'<span class="badge b-grey">pending</span>'}
+                ${it.remark?`<span class="small mut" style="margin-left:6px">💬 ${esc(it.remark)}</span>`:""}
+                ${it.observation?`<div class="small mut" style="margin-top:4px">🔎 ${esc(it.observation)}</div>`:""}
+                ${it.action_required?`<div class="small" style="color:#b45309;margin-top:2px">🛠️ ${esc(it.action_required)}${it.target_date?` · due ${fmtDate(it.target_date)}`:""}</div>`:""}
+              </div>
+              ${ips.length?`<div class="thumbs" style="margin-top:8px">${ips.map(p=>`<img src="${esc(pUrl(p,true))}" onclick="lightbox('${esc(pUrl(p,false))}','${esc(v.branch_name)} · ${esc(it.item_name).replace(/'/g,"")}','${esc(p.uploader_name||"")} · ${fmtDT(p.created_at)}',true,()=>delPhoto('${p.id}','${id}'))">`).join("")}</div>`:""}
+            </div>
+          </div>`;}).join("")}
+        </div>
+      </div>`).join("")
+    : `<div class="card empty">No checklist items on this visit.</div>`}
+
+    <div class="section-t"><h3>All photos (${(photos||[]).length})</h3><div class="ln"></div></div>
+    ${(photos||[]).length ? `<div class="card pad"><div class="thumbs">${photos.map(p=>`
+      <img src="${esc(pUrl(p,true))}" title="${esc(p.checklist_item_name||"")}" onclick="lightbox('${esc(pUrl(p,false))}','${esc(v.branch_name)}','${esc(p.checklist_item_name||"General")} · ${fmtDT(p.created_at)}',true,()=>delPhoto('${p.id}','${id}'))">`).join("")}</div></div>`
+    : `<div class="card empty">No photos uploaded on this visit yet.</div>`}
+
+    <div class="section-t"><h3>Corrective actions (${(actions||[]).length})</h3><div class="ln"></div></div>
+    ${(actions||[]).length ? `<div class="card tablewrap"><table>
+      <thead><tr><th>Title</th><th>Status</th><th>Due</th><th>Assignee</th></tr></thead>
+      <tbody>${actions.map(a=>`
+        <tr><td><b>${esc(a.title||a.description||"—")}</b>${a.description?`<div class="small mut">${esc(a.description)}</div>`:""}</td>
+        <td><span class="badge ${a.status==="CLOSED"||a.status==="VERIFIED"?"b-done":"b-ip"}">${esc(a.status||"—")}</span></td>
+        <td class="small">${fmtDate(a.due_date||a.target_date)}</td>
+        <td class="small">${esc(a.assignee_name||"—")}</td></tr>`).join("")}
+      </tbody></table></div>`
+    : `<div class="card empty">No corrective actions raised.</div>`}`;
+
+  // ---- review actions ----
+  const apprBtn = $("#apprBtn");
+  if (apprBtn) apprBtn.onclick = async ()=>{
+    if (!(await confirmDlg("Approve this visit?", "It will be marked as Completed.", "Approve"))) return;
+    apprBtn.disabled = true; apprBtn.textContent = "Approving…";
+    try {
+      // The state machine needs SUBMITTED → UNDER_REVIEW → APPROVED; chain both
+      // calls so this is one click for the admin.
+      if (v.status === "SUBMITTED") await api(`/visits/${id}/review`, {method:"POST"});
+      await api(`/visits/${id}/approve`, {method:"POST"});
+      toast("Visit approved — moved to Completed");
+      route();
+    } catch(e){ toast(e.message, "err"); apprBtn.disabled=false; apprBtn.innerHTML="✓ Approve &amp; Complete"; }
+  };
+  const rejBtn = $("#rejBtn");
+  if (rejBtn) rejBtn.onclick = ()=>{
+    formModal("Reject this visit", [
+      {k:"comments", label:"Reason (sent back to the visitor)", type:"textarea", req:1, full:1, ph:"e.g. Fire safety photos are unclear — retake them"},
+    ], async d => {
+      if (v.status === "SUBMITTED") await api(`/visits/${id}/review`, {method:"POST"});
+      await api(`/visits/${id}/reject`, {method:"POST", body: JSON.stringify({comments: d.comments})});
+      toast("Visit rejected — sent back to the visitor");
+      route();
+    }, "Reject Visit");
+  };
+
+  $("#expBtn").onclick = async ()=>{
+    try {
+      const blob = await api(`/reports/visits/${id}/export`,{});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `visit-report-${(v.branch_name||"branch").replace(/\W+/g,"-")}.json`;
+      a.click(); URL.revokeObjectURL(url);
+      toast("Report downloaded");
+    } catch(e){ toast("Export failed: "+e.message,"err"); }
+  };
+}
+window.delPhoto = async function(pid, visitId){
+  await api(`/photos/${pid}`,{method:"DELETE"});
+  toast("Photo deleted"); route();
+};
+
+/* ============================================================
+   PHOTOS (global gallery)
+   ============================================================ */
+async function viewPhotos(q){
+  const br = q.branch||"", search=(q.q||"").toLowerCase();
+  // Server-side branch filter is authoritative (photo.visit_id is a visit UUID,
+  // not a branch UUID — client-side comparison can never work).
+  const [photos, branches] = await Promise.all([
+    api(`/photos?limit=200${br?`&branch_id=${br}`:""}`),
+    api("/branches").catch(()=>[])
+  ]);
+  const list = photos.filter(p=>{
+    if (search && !((p.branch_name||"")+" "+(p.checklist_item_name||"")+" "+(p.caption||"")+" "+(p.uploader_name||"")).toLowerCase().includes(search)) return false;
+    return true;
+  });
+  app().innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+      <input id="pq" class="inp" style="max-width:240px" placeholder="Search photos…" value="${esc(q.q||"")}">
+      <select id="pbr" class="inp" style="max-width:200px">
+        <option value="">All branches</option>
+        ${branches.map(b=>`<option value="${b.id}" ${br===b.id?"selected":""}>${esc(b.name)}</option>`).join("")}
+      </select>
+      <div style="flex:1"></div>
+      <span class="pill">${list.length} photo${list.length===1?"":"s"}</span>
+    </div>
+    ${list.length ? `<div class="card pad"><div class="thumbs" style="gap:10px">
+      ${list.map(p=>`
+        <div style="position:relative">
+          <img src="${esc(pUrl(p,true))}" style="width:130px;height:130px" onclick="lightbox('${esc(pUrl(p,false))}','${esc(p.branch_name||"Photo")}','${esc(p.checklist_item_name||p.caption||"General")} · ${esc(p.uploader_name||"")} · ${fmtDT(p.created_at)}',true,()=>galleryDelete('${p.id}'))">
+        </div>`).join("")}
+    </div></div>`
+    : `<div class="card empty"><div class="e">🖼️</div><b>No photos yet</b><p>Photo evidence uploaded from field visits appears here.</p></div>`}`;
+  $("#pq").addEventListener("keydown", e=>{ if(e.key==="Enter") nav("#/photos?q="+encodeURIComponent(e.target.value)); });
+  $("#pbr").onchange = e=> nav("#/photos?branch="+e.target.value);
+}
+window.galleryDelete = async function(pid){
+  await api(`/photos/${pid}`,{method:"DELETE"});
+  toast("Photo deleted"); route();
+};
+
+/* ============================================================
+   CORRECTIVE ACTIONS
+   ============================================================ */
+async function viewActions(q){
+  const status = (q && q.status) || "";
+  const [actions, visits] = await Promise.all([
+    api("/actions").catch(()=>[]),
+    api("/visits?per_page=50").catch(()=>[]),
+  ]);
+  const list = (actions||[]).filter(a => !status || a.status === status
+    || (status==="OPEN_TASKS" && !['CLOSED','VERIFIED'].includes(a.status)));
+  const counts = {};
+  (actions||[]).forEach(a=>{ counts[a.status] = (counts[a.status]||0)+1; });
+
+  app().innerHTML = `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <div class="tabs">
+        <button class="${!status?"on":""}" onclick="nav('#/actions')">All (${(actions||[]).length})</button>
+        <button class="${status==="OPEN_TASKS"?"on":""}" onclick="nav('#/actions?status=OPEN_TASKS')">Open tasks (${(actions||[]).filter(a=>!["CLOSED","VERIFIED"].includes(a.status)).length})</button>
+        <button class="${status==="OPEN"?"on":""}" onclick="nav('#/actions?status=OPEN')">New (${counts["OPEN"]||0})</button>
+        <button class="${status==="CLOSED"?"on":""}" onclick="nav('#/actions?status=CLOSED')">Closed (${counts["CLOSED"]||0})</button>
+        <button class="${status==="VERIFIED"?"on":""}" onclick="nav('#/actions?status=VERIFIED')">Verified (${counts["VERIFIED"]||0})</button>
+      </div>
+    </div>
+    <p class="mut" style="margin-bottom:14px">Tasks raised from NOT OK findings during visits. Actions appear here automatically when an item is marked NOT OK with a corrective action on the mobile app.</p>
+    ${list.length ? `<div class="card tablewrap"><table>
+      <thead><tr><th>Action</th><th>Visit</th><th>Status</th><th>Due</th><th>Assignee</th></tr></thead>
+      <tbody>${list.map(a=>`
+        <tr class="rowbtn" onclick="nav('#/visits/${a.visit_id}')">
+          <td><b>${esc(a.title||"—")}</b>${a.description?`<div class="small mut">${esc(a.description)}</div>`:""}</td>
+          <td class="small">${esc(a.branch_name||"—")}</td>
+          <td><span class="badge ${["CLOSED","VERIFIED"].includes(a.status)?"b-done":a.status==="OVERDUE"?"b-red":"b-ip"}">${esc(a.status||"—")}</span></td>
+          <td class="small">${fmtDate(a.due_date||a.target_date)}</td>
+          <td class="small">${esc(a.assignee_name||"—")}</td>
+        </tr>`).join("")}
+      </tbody></table></div>`
+    : `<div class="card empty"><div class="e">🛠️</div><b>${status?"Nothing with this status":"No corrective actions yet"}</b><p>Actions are created automatically when a field staff marks a checklist item <b>NOT OK</b> with an action required. Do a visit with a NOT OK item and it will show up here.</p><button class="btn btn-p" onclick="nav('#/visits')">View Visits</button></div>`}`;
+}
+
+/* ============================================================
+   DANGER — vanish all data
+   ============================================================ */
+async function viewDanger(){
+  app().innerHTML = `
+    <div class="card pad" style="max-width:640px;margin:0 auto;border:2px solid #fecaca">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="font-size:34px">⚠️</div>
+        <div><h2 style="margin:0;color:#dc2626">Danger Zone</h2>
+        <div class="mut">This cannot be undone. Export anything you need first.</div></div>
+      </div>
+      <p style="line-height:1.6">“Vanish all data” permanently deletes:</p>
+      <ul style="line-height:1.9" class="mut">
+        <li>All users <i>(except the super admin you're logged in as)</i></li>
+        <li>All branches, regions &amp; areas</li>
+        <li>All checklist templates &amp; items <i>(including the imported Excel checklist)</i></li>
+        <li>All visits, answers, photos <i>(including files in storage)</i> &amp; corrective actions</li>
+        <li>All notifications &amp; audit logs</li>
+      </ul>
+      <p style="line-height:1.6">After wiping, the system restarts fresh: roles, permissions and your super-admin account are recreated automatically. Re-import your Excel checklist and add branches/users to start again.</p>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="btn" style="background:#dc2626;color:#fff" id="vanishBtn">🗑️ Vanish All Data</button>
+      </div>
+    </div>`;
+  $("#vanishBtn").onclick = async () => {
+    const c1 = prompt("This deletes EVERYTHING (users, branches, checklists, visits, photos). Type VANISH to confirm:");
+    if (!c1 || c1.trim().toUpperCase() !== "VANISH") { toast("Cancelled — confirmation word did not match", "err"); return; }
+    const btn = $("#vanishBtn"); btn.disabled = true; btn.textContent = "Vanishing…";
+    try {
+      const r = await api("/admin/reset", { method: "POST", body: JSON.stringify({ confirm: "VANISH" }) });
+      const d = r.deleted_counts || {};
+      toast(`Deleted: ${d.users||0} users, ${d.branches||0} branches, ${d.visits||0} visits, ${d.photos||0} photos, ${d.templates||0} templates`);
+      setTimeout(()=>{ TOKEN=null; sessionStorage.removeItem("bv_token"); ME=null; location.hash="#/dashboard"; showLogin(); }, 1200);
+    } catch(e) {
+      toast(e.message, "err"); btn.disabled=false; btn.textContent="🗑️ Vanish All Data";
+    }
+  };
+}
+
+/* ============================================================
+   AUDIT
+   ============================================================ */
+async function viewAudit(){
+  const logs = await api("/dashboard/audit-logs?limit=200");
+  const ico = { LOGIN:"🔑", VISIT_STARTED:"▶️", VISIT_SUBMITTED:"📤", VISIT_CREATED:"🧭", PHOTO_UPLOADED:"📷", PHOTO_DELETED:"🗑", CHECKLIST_ITEM_ANSWERED:"✅", CHECKLIST_CREATED:"📋", CHECKLIST_UPDATED:"📋", USER_CREATED:"👤", BRANCH_CREATED:"🏢" };
+  app().innerHTML = `
+    <p class="mut" style="margin-bottom:14px">Full activity trail — every action, by whom, when.</p>
+    <div class="card tablewrap"><table>
+      <thead><tr><th>When</th><th>User</th><th>Action</th><th>Entity</th><th>Details</th></tr></thead>
+      <tbody>${logs.length ? logs.map(l=>`
+        <tr>
+          <td class="small mut" style="white-space:nowrap">${fmtRel(l.created_at)}<div class="small soft">${fmtDT(l.created_at).split(", ")[1]||""}</div></td>
+          <td class="small"><b>${esc(l.user||"system")}</b></td>
+          <td><span class="chip">${ico[l.action]||"•"}</span><span class="small b">${esc((l.action||"").replace(/_/g," "))}</span></td>
+          <td class="small mut">${esc(l.entity_type||"—")}</td>
+          <td class="small soft mono" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(typeof l.details==="object"?JSON.stringify(l.details):l.details||"—")}</td>
+        </tr>`).join("") : `<tr><td colspan="5"><div class="empty">No activity recorded yet.</div></td></tr>`}
+      </tbody></table></div>`;
+}
+
+/* ---------- boot ---------- */
+if (TOKEN) boot(); else showLogin();
+</script>
+</body>
+</html>

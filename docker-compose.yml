@@ -1,0 +1,121 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: bv_user
+      POSTGRES_PASSWORD: bv_password
+      POSTGRES_DB: bv_inspection
+    # No host port binding needed: backend talks to postgres over the docker
+    # network. Host binding removed to avoid clashes with other local projects.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bv_user -d bv_inspection"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    # No host port binding: a native Redis already listens on host 6379.
+    # Backend reaches redis via the docker network (redis://redis:6379/0).
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    # No host port binding: avoids clashes with other local MinIO instances.
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      # MinIO can be slow on first boot / after machine restart — give it up
+      # to ~5 minutes of grace before declaring it unhealthy.
+      retries: 30
+      start_period: 30s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      # Host 8010 -> container 8000. Port 8000 was already taken on this
+      # machine (Supabase stack), so the API is published on 8010 instead.
+      - "8010:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://bv_user:bv_password@postgres:5432/bv_inspection
+      REDIS_URL: redis://redis:6379/0
+      # Rotated since the hardcoded default was deployed on the LAN. Invalidates
+      # pre-existing sessions (one re-login) in exchange for a non-public key.
+      JWT_SECRET: Bj3g5qP2dyFCxU8VYQ7XlNEone6IMHz0cRmZLAG41rSiKDWbuTfwvJapsk9tOh
+      # Photos are saved directly in PostgreSQL (photo_blobs bytea table) so the
+      # database is the single source of truth for evidence — mirrors production.
+      # MinIO variables below remain for legacy read-back of older uploads.
+      STORAGE_MODE: postgres
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: branch-visit-photos
+      CORS_ORIGINS: '["http://localhost:3000","http://localhost:8000"]'
+      # Per-worker concurrency budgets (see app/utils/ocr_runtime.py).
+      OCR_MAX_CONCURRENCY: "1"
+      OCR_QUEUE_WAIT_SECONDS: "5"
+      OCR_TIMEOUT_SECONDS: "45"
+      IMAGE_MAX_CONCURRENCY: "2"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - "./Branch Audit Checklist - Main.xlsx:/app/Branch Audit Checklist - Main.xlsx"
+    # Multiple workers so one blocked OCR cannot stall the whole API; workers
+    # are recycled periodically to bound any slow leak.
+    # Keep gunicorn on ONE logical line: under `sh -c` a newline terminates the
+    # command, which would drop --bind and leave gunicorn on 127.0.0.1:8000.
+    # --max-requests stays high on purpose: it is a leak guard, and a low value
+    # recycles workers so often under load that in-flight requests get dropped.
+    command: >
+      sh -c "alembic upgrade head && gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w 3 --bind 0.0.0.0:8000 --timeout 120 --graceful-timeout 30 --max-requests 20000 --max-requests-jitter 2000"
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: /api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - web
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:

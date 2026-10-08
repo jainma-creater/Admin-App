@@ -1,0 +1,163 @@
+version: "3.9"
+
+name: branch-visit
+
+services:
+
+  # ---------------------------------------------------------------- postgres
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bv_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bv_password}
+      POSTGRES_DB: ${POSTGRES_DB:-bv_inspection}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bv_user} -d ${POSTGRES_DB:-bv_inspection}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # ------------------------------------------------------------------- redis
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------------- backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-bv_user}:${POSTGRES_PASSWORD:-bv_password}@db:5432/${POSTGRES_DB:-bv_inspection}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-Bj3g5qP2dyFCxU8VYQ7XlNEone6IMHz0cRmZLAG41rSiKDWbuTfwvJapsk9tOh}
+      USE_S3_STORAGE: "true"
+      STORAGE_MODE: "s3"
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-svhrms}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-AKIAYITNYJBJRIZLD7PC}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-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}
+      S3_KEY_PREFIX: "branch-visit"
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-admin@company.com}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-admin123Admin!}
+      SEED_DEMO: "true"
+      # ---- Concurrency budgets (see app/utils/ocr_runtime.py) ---------------
+      OCR_MAX_CONCURRENCY: "1"
+      OCR_QUEUE_WAIT_SECONDS: "5"
+      OCR_TIMEOUT_SECONDS: "45"
+      OCR_TESS_WORKERS: "2"
+      OCR_QUEUE_MAX_BYTES: "2097152"
+      OCR_QUEUE_MAX_DEPTH: "200"
+      IMAGE_MAX_CONCURRENCY: "2"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - photos:/app/data/photos
+    mem_limit: 4g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    command: >
+      sh -c "python seed.py && alembic stamp head && gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w 6 --bind 0.0.0.0:8000 --backlog 2048 --keep-alive 5 --timeout 120 --graceful-timeout 30 --max-requests 20000 --max-requests-jitter 2000"
+
+  # ----------------------------------------------------------------- celery worker (OCR queue)
+  celery-ocr:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-bv_user}:${POSTGRES_PASSWORD:-bv_password}@db:5432/${POSTGRES_DB:-bv_inspection}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-Bj3g5qP2dyFCxU8VYQ7XlNEone6IMHz0cRmZLAG41rSiKDWbuTfwvJapsk9tOh}
+      USE_S3_STORAGE: "true"
+      STORAGE_MODE: "s3"
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-svhrms}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-AKIAYITNYJBJRIZLD7PC}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-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}
+      S3_KEY_PREFIX: "branch-visit"
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-admin@company.com}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-admin123Admin!}
+      SEED_DEMO: "false"
+      OCR_MAX_CONCURRENCY: "1"
+      OCR_QUEUE_WAIT_SECONDS: "5"
+      OCR_TIMEOUT_SECONDS: "45"
+      OCR_TESS_WORKERS: "2"
+      IMAGE_MAX_CONCURRENCY: "2"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "celery -A app.core.celery_app worker -Q ocr -c 1 --loglevel=info --pool=prefork --prefetch-multiplier=1"
+
+  # ----------------------------------------------------------------- celery worker (image queue)
+  celery-image:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-bv_user}:${POSTGRES_PASSWORD:-bv_password}@db:5432/${POSTGRES_DB:-bv_inspection}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-Bj3g5qP2dyFCxU8VYQ7XlNEone6IMHz0cRmZLAG41rSiKDWbuTfwvJapsk9tOh}
+      USE_S3_STORAGE: "true"
+      STORAGE_MODE: "s3"
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-svhrms}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-AKIAYITNYJBJRIZLD7PC}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-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}
+      S3_KEY_PREFIX: "branch-visit"
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-admin@company.com}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-admin123Admin!}
+      SEED_DEMO: "false"
+      IMAGE_MAX_CONCURRENCY: "2"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "celery -A app.core.celery_app worker -Q image -c 2 --loglevel=info --pool=prefork --prefetch-multiplier=1"
+
+  # ----------------------------------------------------------------- web
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_BASE_PATH: /branch-visit
+        NEXT_PUBLIC_API_URL: /branch-visit/api/v1
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_BASE_PATH: /branch-visit
+      NEXT_PUBLIC_API_URL: /branch-visit/api/v1
+    ports:
+      - "127.0.0.1:13004:3000"
+
+volumes:
+  pgdata:
+  redisdata:
+  photos:

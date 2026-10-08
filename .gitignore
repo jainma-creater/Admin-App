@@ -1,0 +1,63 @@
+# Environment
+.env
+.env.local
+.env.*.local
+.env.prod
+.env.prod.*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Alembic (migration files are committed on purpose)
+
+# Node
+node_modules/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# Expo
+mobile/.expo/
+mobile/web-build/
+
+# Binaries & large artifacts
+*.apk
+*.aab
+Audit Evidence*/
+
+# Docker
+*.log
+.docker/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.pem
+*.key
+*.cert
+
+# Uploads
+uploads/
+thumbs/
+static/media/
+
+# MinIO
+infrastructure/minio/data/

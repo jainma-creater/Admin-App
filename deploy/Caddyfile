@@ -1,0 +1,20 @@
+# Caddy: automatic HTTPS (Let's Encrypt) + reverse proxy to the backend.
+# Replace the domain at first run, or leave {$DOMAIN} and set DOMAIN in aws.env
+# (Caddy reads environment variables from the container automatically only if
+# passed; the compose file mounts this file, so we use {$DOMAIN} and pass the
+# env var through in aws.env -> compose environment).
+#
+# Simplest: edit line 8 to your real domain once, before first start.
+
+{$DOMAIN} {
+	encode gzip
+
+	# API + admin site (backend serves both)
+	reverse_proxy backend:8000
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}

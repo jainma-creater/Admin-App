@@ -1,0 +1,147 @@
+# =============================================================================
+#   PRODUCTION — single AWS EC2 (Amazon Linux 2023)
+#   postgres + redis + backend (gunicorn) + web (Next.js) + nginx (TLS)
+#
+#   Photo evidence is stored IN PostgreSQL (photo_blobs bytea table) so the
+#   database is the single source of truth — a pg_dump backs up everything.
+#
+#   Usage on the server:
+#     cp deploy/aws.env.example .env.prod
+#     # edit .env.prod with real secrets (generate JWT secret + admin password)
+#     docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+#   TLS certificates: issued by certbot on the host into ./data/certbot
+#   (see AWS_DEPLOYMENT_GUIDE.md — section 7).
+# =============================================================================
+
+name: branchvisit
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+
+  # ---------------------------------------------------------------- postgres
+  postgres:
+    image: postgres:16-alpine
+    container_name: branchvisit_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bv_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-bv_inspection}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bv_user} -d ${POSTGRES_DB:-bv_inspection}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    logging: *default-logging
+    # No public ports — reachable only inside the docker network.
+
+  # ------------------------------------------------------------------- redis
+  redis:
+    image: redis:7-alpine
+    container_name: branchvisit_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    logging: *default-logging
+
+  # ----------------------------------------------------------------- backend
+  backend:
+    image: "${REGISTRY:-branchvisit}/backend:${TAG:-latest}"
+    container_name: branchvisit_backend
+    restart: unless-stopped
+    build:
+      context: ./backend
+    env_file:
+      - .env.prod
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-bv_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bv_inspection}
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_MODE: postgres
+      ENVIRONMENT: production
+      DOCS_ENABLED: "false"
+      CORS_ORIGINS: '["https://${DOMAIN}","http://localhost:3000","http://localhost:8081"]'
+      # Per-worker concurrency budgets (see app/utils/ocr_runtime.py). With -w 4
+      # below the service-wide ceiling is 4 concurrent OCR inferences — keep this
+      # at 1 unless the host has dedicated, otherwise-idle CPU for the model.
+      OCR_MAX_CONCURRENCY: "1"
+      OCR_QUEUE_WAIT_SECONDS: "5"
+      OCR_TIMEOUT_SECONDS: "45"
+      IMAGE_MAX_CONCURRENCY: "2"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # /health is exempt from rate limiting, so container health can never be
+      # throttled out of its own budget.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 8s
+      retries: 5
+      start_period: 30s
+    # Keep gunicorn on ONE logical line: under `sh -c` a newline terminates the
+    # command, so a wrapped invocation silently drops --bind/--timeout and
+    # leaves gunicorn listening on 127.0.0.1:8000 (unreachable from nginx).
+    command: >
+      sh -c "alembic upgrade head && python seed.py && gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w 8 --bind 0.0.0.0:8000 --backlog 2048 --keep-alive 5 --timeout 120 --graceful-timeout 30 --max-requests 20000 --max-requests-jitter 2000"
+    logging: *default-logging
+    # No public ports — nginx is the only thing exposed to the internet.
+
+  # --------------------------------------------------------------------- web
+  web:
+    image: "${REGISTRY:-branchvisit}/web:${TAG:-latest}"
+    container_name: branchvisit_web
+    restart: unless-stopped
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_API_URL: /api/v1
+    environment:
+      NEXT_PUBLIC_API_URL: /api/v1
+      HOSTNAME: "0.0.0.0"
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 8s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  # ------------------------------------------------------------------- nginx
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: branchvisit_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./data/certbot/conf:/etc/letsencrypt:ro
+      - ./data/certbot/www:/var/www/certbot:ro
+    depends_on:
+      - backend
+      - web
+    logging: *default-logging
+
+volumes:
+  pgdata:
+  redisdata:

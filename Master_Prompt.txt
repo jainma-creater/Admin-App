@@ -1,0 +1,2173 @@
+You are a Senior Staff Software Architect, Backend Engineer, Mobile Engineer,
+DevOps Engineer, Security Engineer and QA Engineer.
+
+You are working on an existing production-oriented application called:
+
+"Branch Visit Inspection, Photo Evidence & Compliance Management System"
+
+The system is designed for approximately 50–100 internal company users.
+
+IMPORTANT:
+Do NOT rewrite the project unnecessarily.
+Do NOT replace the existing architecture just for the sake of using newer technologies.
+First inspect the existing repository and understand what is already implemented.
+Preserve working functionality.
+Improve the architecture only where it is required for production reliability,
+security, scalability, maintainability and mobile usability.
+
+============================================================
+1. EXISTING SYSTEM
+============================================================
+
+The existing system consists of:
+
+BACKEND
+- Python 3.12
+- FastAPI
+- Uvicorn
+- SQLAlchemy 2.x async
+- asyncpg
+- Alembic
+- Pydantic v2
+- JWT authentication
+- bcrypt
+- Redis
+- Pillow / pillow-heif
+- Tesseract OCR
+- openpyxl
+- pytest
+
+WEB
+- Next.js 14
+- React 18
+- TypeScript
+- App Router
+- Tailwind CSS
+- TanStack Query
+- Axios
+- Recharts
+
+MOBILE
+- Expo SDK 57
+- Expo Router
+- React Native 0.86
+- React 19
+- TypeScript
+- expo-camera
+- expo-image-picker
+- expo-image-manipulator
+- expo-secure-store
+- expo-sqlite
+- Zustand
+- TanStack Query
+- Axios
+
+INFRASTRUCTURE
+- Docker
+- Docker Compose
+- nginx
+- PostgreSQL 16
+- Redis 7
+- MinIO/object storage
+- Cloudflare/TLS
+- Linux production server
+
+OCR
+- Tesseract
+- Server-side OCR
+- Asset code plate recognition
+
+============================================================
+2. BUSINESS PURPOSE
+============================================================
+
+The application digitizes branch inspection workflows.
+
+Main workflows:
+
+1. Branch Visit
+2. Fixed Asset Visit
+3. IT Asset Visit
+
+The system supports:
+
+- Role-based visit creation
+- Checklist-based inspections
+- Photo evidence
+- Asset verification
+- OCR of asset/code plates
+- Corrective actions
+- Review/approval
+- Super-admin inspection console
+- Reports
+- Excel export
+- Employee management
+- Branch management
+- Region/Area/Branch hierarchy
+- Organization management
+- Audit trail
+- Dashboard
+- Mobile field inspection
+
+The application is intended for approximately 50–100 internal users.
+
+The application must be reliable even when field employees have poor or
+intermittent internet connectivity.
+
+============================================================
+3. PRIMARY PRODUCTION GOAL
+============================================================
+
+Build a genuinely production-ready system for 50–100 users.
+
+The application must be:
+
+- Secure
+- Reliable
+- Maintainable
+- Observable
+- Recoverable
+- Offline-capable
+- Mobile-friendly
+- Fast enough for field usage
+- Safe for photo evidence
+- Role-secured
+- Easy to deploy
+- Easy to update
+- Easy to backup and restore
+
+Do NOT optimize for millions of users.
+
+Optimize for:
+
+- 50–100 users
+- potentially concurrent inspections
+- large numbers of photos
+- unreliable mobile networks
+- internal enterprise usage
+- auditability
+- data integrity
+
+============================================================
+4. TARGET PRODUCTION ARCHITECTURE
+============================================================
+
+Use this architecture:
+
+                    INTERNET
+                       |
+                 Cloudflare
+                       |
+                    HTTPS
+                       |
+                    nginx
+                  /        \
+                 /          \
+          Next.js Web      FastAPI
+                              |
+             +----------------+----------------+
+             |                |                |
+        PostgreSQL          Redis        Object Storage
+        metadata           queue/cache   S3/MinIO
+                                             |
+                                            Photos
+
+Mobile App
+    |
+    | HTTPS
+    |
+Cloudflare
+    |
+nginx
+    |
+FastAPI
+    |
++---+----------+----------+
+|              |          |
+PostgreSQL   Redis    Object Storage
+                           |
+                         Photos
+
+OCR:
+
+Photo Upload
+    |
+Object Storage
+    |
+OCR Job
+    |
+Redis Queue / Worker
+    |
+Tesseract
+    |
+OCR Result
+    |
+PostgreSQL
+
+============================================================
+5. IMPORTANT STORAGE DECISION
+============================================================
+
+DO NOT use PostgreSQL as the primary long-term storage location for original
+photo binaries.
+
+PostgreSQL must store:
+
+- photo ID
+- visit ID
+- asset ID
+- object storage key
+- filename
+- MIME type
+- dimensions
+- file size
+- checksum
+- thumbnail reference
+- OCR status
+- OCR result
+- created timestamp
+- uploader
+- upload status
+- metadata
+
+Object storage must store the actual images.
+
+Use an S3-compatible abstraction.
+
+Production options:
+
+- AWS S3
+OR
+- MinIO on company infrastructure
+
+The application must not be tightly coupled to one provider.
+
+Create a storage service interface such as:
+
+StorageService
+
+with operations:
+
+- upload()
+- download()
+- delete()
+- exists()
+- generate_presigned_url()
+- generate_thumbnail()
+- get_metadata()
+
+The backend must communicate with the abstraction rather than directly
+embedding S3/MinIO-specific logic throughout the application.
+
+============================================================
+6. MOBILE MUST BE OFFLINE-FIRST
+============================================================
+
+This is one of the highest-priority requirements.
+
+The mobile app must continue working when the internet is unavailable.
+
+Use:
+
+Expo SQLite
++
+local file storage
++
+sync queue
+
+The user must be able to:
+
+- login
+- download assigned data
+- open a visit
+- start a visit
+- view checklist
+- fill checklist
+- capture photos
+- enter remarks
+- verify assets
+- complete the inspection
+- save everything locally
+
+even if the internet temporarily disappears.
+
+The app must NOT lose user-entered data because of network failure.
+
+============================================================
+7. MOBILE LOCAL DATABASE
+============================================================
+
+Design SQLite tables for local state.
+
+Example:
+
+local_visits
+local_checklist_answers
+local_assets
+local_photos
+sync_queue
+sync_conflicts
+sync_metadata
+
+Every local record must have:
+
+- local_id
+- server_id nullable
+- created_at
+- updated_at
+- sync_status
+- retry_count
+- last_error
+
+Use states such as:
+
+PENDING
+UPLOADING
+SYNCED
+FAILED
+CONFLICT
+
+============================================================
+8. PHOTO UPLOAD ARCHITECTURE
+============================================================
+
+Never depend on a single synchronous upload request.
+
+Flow:
+
+Camera
+  |
+Capture photo
+  |
+Compress locally
+  |
+Store locally
+  |
+Create local photo record
+  |
+Add to sync queue
+  |
+Upload when network available
+  |
+Server validates
+  |
+Object storage
+  |
+Server confirms
+  |
+Mark SYNCED
+
+If upload fails:
+
+FAILED
+  |
+automatic retry
+  |
+exponential backoff
+  |
+retry again
+
+The user must be able to see:
+
+- Pending uploads
+- Uploading
+- Uploaded
+- Failed uploads
+
+Provide:
+
+"Retry failed uploads"
+
+functionality.
+
+============================================================
+9. IMAGE PROCESSING
+============================================================
+
+Do not upload unnecessarily huge images.
+
+Before upload:
+
+- Validate MIME type
+- Validate file size
+- Resize large images
+- Preserve enough quality for inspection evidence
+- Generate thumbnail
+- Strip unnecessary metadata where appropriate
+- Compress image
+
+Target maximum image dimension around:
+
+1920px
+
+unless the business requirement requires original resolution.
+
+Do NOT destroy the evidence quality required for asset identification.
+
+Keep configuration values in environment/config:
+
+PHOTO_MAX_DIMENSION
+PHOTO_QUALITY
+PHOTO_MAX_SIZE_MB
+
+============================================================
+10. OCR ARCHITECTURE
+============================================================
+
+OCR must NOT block the mobile user unnecessarily.
+
+Flow:
+
+Photo uploaded
+     |
+API returns successful upload
+     |
+OCR job created
+     |
+Redis queue
+     |
+OCR worker
+     |
+Tesseract
+     |
+Save OCR result
+     |
+Update photo/asset
+     |
+Mobile receives result during sync
+
+OCR statuses:
+
+NOT_STARTED
+QUEUED
+PROCESSING
+COMPLETED
+FAILED
+
+Store:
+
+- OCR text
+- confidence if available
+- OCR engine
+- processing time
+- OCR timestamp
+- error information
+
+Use the existing staged OCR strategy:
+
+1. Downscaled grayscale pass
+2. If unsuccessful, full-resolution variants
+3. Parallel processing for difficult images
+
+Do not run expensive OCR synchronously inside the API request.
+
+============================================================
+11. BACKGROUND WORKER
+============================================================
+
+Introduce a dedicated worker process.
+
+Responsibilities:
+
+- OCR
+- photo processing
+- thumbnail generation if needed
+- report generation if heavy
+- Excel generation if heavy
+- cleanup jobs
+- notification jobs if implemented
+
+Redis may be used as the queue/backend.
+
+Do not make FastAPI workers perform long-running CPU-intensive jobs.
+
+Architecture:
+
+FastAPI
+   |
+Redis
+   |
+Worker
+   |
+Tesseract / processing
+
+============================================================
+12. DATABASE DESIGN
+============================================================
+
+PostgreSQL is the source of truth for application metadata.
+
+Use proper foreign keys.
+
+Use indexes for:
+
+- user_id
+- role_id
+- region_id
+- area_id
+- branch_id
+- visit_id
+- visit_type
+- status
+- created_at
+- updated_at
+- asset_code
+- employee_id
+- review_status
+- sync-related identifiers
+
+Use database constraints wherever possible.
+
+Examples:
+
+- unique employee identifiers
+- unique asset codes where applicable
+- valid foreign keys
+- valid visit states
+- valid role relationships
+
+Do not rely exclusively on application-level validation.
+
+============================================================
+13. DATABASE MIGRATIONS
+============================================================
+
+Use Alembic.
+
+Rules:
+
+- Every schema change requires a migration.
+- Never manually modify production database schema.
+- Never delete migrations that have already reached production.
+- Test migrations on staging.
+- Production startup must NOT blindly generate migrations.
+
+Preferred:
+
+Deployment pipeline:
+
+backup
+  |
+migration
+  |
+health check
+  |
+application start
+
+If migration fails:
+
+DO NOT start the application as healthy.
+
+============================================================
+14. AUTHENTICATION
+============================================================
+
+Implement secure JWT authentication.
+
+Access token:
+
+- short-lived
+
+Refresh token:
+
+- longer-lived
+- securely stored
+- rotatable
+- revocable
+
+Mobile:
+
+Use expo-secure-store.
+
+Never store authentication tokens in:
+
+- AsyncStorage
+- plain SQLite
+- normal files
+- source code
+
+Implement:
+
+- login
+- refresh
+- logout
+- token rotation
+- account deactivation
+- password change
+- session invalidation
+
+============================================================
+15. PASSWORD SECURITY
+============================================================
+
+Use bcrypt or another approved password hashing algorithm.
+
+Never store:
+
+- plaintext passwords
+- reversible passwords
+- default production passwords
+
+Production bootstrap credentials MUST come from environment/secrets.
+
+Force administrator to change the initial password.
+
+============================================================
+16. AUTHORIZATION
+============================================================
+
+Authentication is NOT authorization.
+
+Every protected API endpoint must verify:
+
+1. User identity
+2. User active status
+3. Role
+4. Organization scope
+5. Region scope
+6. Area scope
+7. Branch scope
+8. Visit permissions
+
+NEVER trust role or branch information supplied by the mobile client.
+
+The backend must independently determine permissions.
+
+============================================================
+17. ROLE MODEL
+============================================================
+
+Preserve the existing role model unless repository inspection shows a better
+existing implementation.
+
+Roles include concepts such as:
+
+SUPER_ADMIN
+HR
+REGIONAL_ADMIN
+AREA_MANAGER
+BRANCH_MANAGER
+AUDITOR
+OPS
+
+Support organization scope:
+
+PAN INDIA
+REGION
+AREA
+BRANCH
+
+Example:
+
+Regional Admin
+    |
+    +-- Region A
+          |
+          +-- Area 1
+               |
+               +-- Branch 001
+               +-- Branch 002
+
+A user must only access data permitted by their scope.
+
+============================================================
+18. VISIT STATE MACHINE
+============================================================
+
+Implement an explicit visit lifecycle.
+
+Example:
+
+DRAFT
+  |
+IN_PROGRESS
+  |
+COMPLETED
+  |
+SUBMITTED
+  |
+UNDER_REVIEW
+  |
+APPROVED
+
+Alternative:
+
+SUBMITTED
+   |
+REJECTED
+   |
+IN_PROGRESS
+   |
+RESUBMITTED
+
+Do not use random boolean flags to represent complex workflow state.
+
+Use explicit status fields and transition validation.
+
+Every transition must be auditable.
+
+============================================================
+19. CHECKLIST RULES
+============================================================
+
+A visit cannot be submitted unless all mandatory checklist requirements
+are completed.
+
+Support:
+
+- required item
+- optional item
+- role-specific item
+- evidence-required item
+- photo-required item
+- remarks-required item
+- asset verification
+- corrective action
+
+Validation must happen:
+
+1. On mobile
+2. On API
+3. Before final submission
+
+The API is authoritative.
+
+============================================================
+20. PHOTO EVIDENCE INTEGRITY
+============================================================
+
+Every evidence photo should have:
+
+- photo_id
+- visit_id
+- checklist_item_id if applicable
+- asset_id if applicable
+- uploaded_by
+- captured_at
+- uploaded_at
+- checksum/hash
+- object storage key
+- file size
+- MIME type
+- dimensions
+- OCR status
+- evidence status
+
+Do not allow arbitrary users to replace evidence silently.
+
+If evidence is replaced/deleted:
+
+create an audit event.
+
+============================================================
+21. AUDIT LOGGING
+============================================================
+
+Create immutable audit records for important actions.
+
+Examples:
+
+LOGIN
+LOGOUT
+USER_CREATED
+USER_UPDATED
+USER_DEACTIVATED
+VISIT_CREATED
+VISIT_STARTED
+VISIT_SUBMITTED
+VISIT_APPROVED
+VISIT_REJECTED
+PHOTO_UPLOADED
+PHOTO_DELETED
+ASSET_UPDATED
+CHECKLIST_UPDATED
+ROLE_CHANGED
+BRANCH_CHANGED
+EXPORT_CREATED
+REPORT_CREATED
+
+Store:
+
+- actor
+- action
+- entity
+- entity_id
+- timestamp
+- IP where appropriate
+- user agent/device information where appropriate
+- before state where appropriate
+- after state where appropriate
+
+Do not allow normal users to edit audit logs.
+
+============================================================
+22. SECURITY
+============================================================
+
+Production requirements:
+
+- HTTPS only
+- HSTS
+- secure cookies where cookies are used
+- appropriate CORS
+- no wildcard production CORS
+- secure headers
+- rate limiting
+- login brute-force protection
+- request size limits
+- upload size limits
+- MIME validation
+- filename sanitization
+- path traversal protection
+- SQL injection protection
+- XSS protection
+- CSRF protection where applicable
+- SSRF protection
+- secure secret management
+
+Never expose:
+
+- database credentials
+- JWT secrets
+- storage credentials
+- Redis credentials
+- API keys
+
+to the frontend or mobile application.
+
+============================================================
+23. API SECURITY
+============================================================
+
+All APIs except public health endpoints must require appropriate
+authentication.
+
+Use:
+
+/api/v1/
+
+Do not break existing API contracts without necessity.
+
+Validate:
+
+- request body
+- query parameters
+- path parameters
+- uploaded files
+
+Add consistent error responses.
+
+Example:
+
+{
+  "error": {
+    "code": "VISIT_NOT_FOUND",
+    "message": "Visit not found",
+    "request_id": "..."
+  }
+}
+
+Every request should have a request ID.
+
+============================================================
+24. RATE LIMITING
+============================================================
+
+Protect:
+
+- login
+- refresh
+- file upload
+- OCR submission
+- export
+- expensive report endpoints
+
+Use Redis where appropriate.
+
+Do not rate-limit normal internal API usage so aggressively that it hurts
+field operations.
+
+============================================================
+25. FILE UPLOAD SECURITY
+============================================================
+
+Never trust the filename extension.
+
+Validate:
+
+- MIME
+- actual file signature
+- file size
+- image dimensions
+- supported image formats
+
+Reject:
+
+- executable files
+- scripts
+- unsupported formats
+- oversized files
+
+Never directly expose filesystem paths.
+
+Use object storage keys.
+
+============================================================
+26. MOBILE UX
+============================================================
+
+The mobile application is a field application.
+
+Prioritize:
+
+- large buttons
+- simple navigation
+- clear status
+- minimal typing
+- camera-first workflow
+- offline indicators
+- upload progress
+- sync status
+- retry controls
+- confirmation before destructive actions
+
+Main mobile navigation should include:
+
+Dashboard
+Visits
+Start Visit
+Pending Sync
+Notifications
+Profile
+
+During a visit:
+
+Visit details
+  |
+Checklist
+  |
+Question
+  |
+Evidence
+  |
+Photo
+  |
+Remarks
+  |
+Next
+
+Do not make field employees navigate complicated admin interfaces.
+
+============================================================
+27. OFFLINE UX
+============================================================
+
+Always clearly display:
+
+ONLINE
+OFFLINE
+SYNCING
+SYNC COMPLETE
+SYNC FAILED
+
+When offline:
+
+Show:
+
+"You are offline. Your work is being saved on this device."
+
+Do not show a generic API/network error and lose the user's work.
+
+============================================================
+28. SYNC ENGINE
+============================================================
+
+Build a robust synchronization engine.
+
+Requirements:
+
+- idempotent requests
+- retry
+- exponential backoff
+- conflict handling
+- duplicate prevention
+- server acknowledgement
+- local state updates
+- resumable uploads where practical
+
+Every synchronization operation should have an idempotency key.
+
+Example:
+
+Idempotency-Key:
+device_id + local_record_id + operation_id
+
+If the same request reaches the server twice,
+the server must not create duplicate records.
+
+============================================================
+29. DEVICE MANAGEMENT
+============================================================
+
+Store a device identifier.
+
+Track:
+
+- device_id
+- user_id
+- platform
+- app_version
+- last_seen
+- push token if notifications are implemented
+
+Allow administrators to revoke device sessions if required.
+
+Do NOT collect unnecessary personal/device information.
+
+============================================================
+30. ENVIRONMENT SEPARATION
+============================================================
+
+Create three environments:
+
+DEVELOPMENT
+STAGING
+PRODUCTION
+
+Never use production credentials locally.
+
+Never point development mobile builds at production APIs.
+
+Example:
+
+DEV:
+api-dev.company.com
+
+STAGING:
+api-staging.company.com
+
+PRODUCTION:
+api.company.com
+
+============================================================
+31. CONFIGURATION
+============================================================
+
+Use environment variables/secrets.
+
+Create:
+
+.env.example
+
+Never commit:
+
+.env
+.env.production
+JWT secrets
+database passwords
+AWS keys
+storage credentials
+
+Provide validation at startup.
+
+If a required production variable is missing,
+fail fast with a clear error.
+
+============================================================
+32. DOCKER PRODUCTION
+============================================================
+
+Use production Docker images.
+
+Backend:
+
+- python:3.12-slim
+- non-root user
+- minimal packages
+- Tesseract installed
+- healthcheck
+
+Web:
+
+- multi-stage Next.js build
+- standalone output
+- non-root runtime
+
+Worker:
+
+- separate container
+- same backend codebase if practical
+- dedicated worker process
+
+nginx:
+
+- separate container or managed reverse proxy
+
+Redis:
+
+- internal network only
+
+PostgreSQL:
+
+- internal network only if self-hosted
+
+Never expose PostgreSQL or Redis publicly.
+
+============================================================
+33. PRODUCTION SERVER
+============================================================
+
+For 50–100 users, use a Linux production server.
+
+Initial deployment may use one properly sized production server.
+
+Suggested minimum:
+
+8 vCPU
+16 GB RAM
+200+ GB SSD
+
+Adjust based on actual photo volume.
+
+Do not expose:
+
+5432
+6379
+MinIO administrative ports
+
+to the public internet.
+
+Only expose:
+
+443
+
+and optionally 80 for HTTP → HTTPS redirect.
+
+============================================================
+34. DATABASE
+============================================================
+
+For production, prefer managed PostgreSQL if available.
+
+If self-hosting PostgreSQL:
+
+- persistent volume
+- automated backups
+- WAL/PITR where practical
+- monitoring
+- restore testing
+- disk monitoring
+
+Database must never be stored on an ephemeral container filesystem.
+
+============================================================
+35. OBJECT STORAGE
+============================================================
+
+Production object storage must have:
+
+- persistent storage
+- access control
+- private buckets
+- lifecycle rules
+- backup strategy
+- versioning where appropriate
+
+Do not make evidence photos publicly accessible.
+
+Use:
+
+short-lived signed URLs
+
+for authorized viewing/download.
+
+============================================================
+36. BACKUPS
+============================================================
+
+Implement automated backups.
+
+Database:
+
+Daily full backup
++
+appropriate incremental/WAL strategy if supported.
+
+Object storage:
+
+Backup photos according to business retention requirements.
+
+Keep backups separate from the production server.
+
+Example:
+
+Production server
+     |
+     +---- PostgreSQL backup
+     |
+     +---- Object storage backup
+              |
+              ▼
+          Backup storage
+
+IMPORTANT:
+
+A backup is NOT considered valid until restoration has been tested.
+
+Create a documented restore procedure.
+
+============================================================
+37. RETENTION
+============================================================
+
+Create configurable retention policies.
+
+Examples:
+
+PHOTO_RETENTION_DAYS
+AUDIT_RETENTION_DAYS
+LOG_RETENTION_DAYS
+
+Do not automatically delete business evidence without explicit
+business approval.
+
+============================================================
+38. MONITORING
+============================================================
+
+Implement:
+
+- application health check
+- database health
+- Redis health
+- worker health
+- disk usage
+- CPU
+- memory
+- API latency
+- error rate
+- OCR processing time
+- failed uploads
+- failed jobs
+- database connections
+
+Provide:
+
+/health
+/readiness
+/liveness
+
+where appropriate.
+
+Health checks must not expose secrets.
+
+============================================================
+39. LOGGING
+============================================================
+
+Use structured JSON logs where practical.
+
+Every request should contain:
+
+request_id
+
+Log:
+
+- timestamp
+- level
+- service
+- request_id
+- user_id when available
+- endpoint
+- response status
+- latency
+
+Never log:
+
+- passwords
+- JWTs
+- refresh tokens
+- storage secrets
+- sensitive evidence contents
+
+============================================================
+40. ERROR HANDLING
+============================================================
+
+Never expose raw Python stack traces to users.
+
+Production:
+
+DEBUG=false
+
+Return clean API errors.
+
+Internally log full stack traces with request IDs.
+
+============================================================
+41. PERFORMANCE
+============================================================
+
+Target:
+
+Normal API requests:
+<500ms where practical
+
+Database queries:
+properly indexed
+
+Mobile:
+fast checklist navigation
+
+Photo:
+upload asynchronously
+
+OCR:
+background processing
+
+Dashboard:
+pagination
+
+Inspection lists:
+server-side filtering and pagination
+
+Excel exports:
+background job for large datasets
+
+Do NOT load thousands of rows into browser memory.
+
+============================================================
+42. PAGINATION
+============================================================
+
+Every potentially large endpoint must paginate.
+
+Examples:
+
+/visits
+/assets
+/photos
+/users
+/audit-logs
+/inspections
+/reports
+
+Default:
+
+page size = 25 or 50
+
+Maximum:
+
+100
+
+Never allow unlimited database queries through API parameters.
+
+============================================================
+43. EXCEL EXPORT
+============================================================
+
+Preserve the existing Excel export capability.
+
+For small exports:
+
+synchronous response may be acceptable.
+
+For large exports:
+
+background job:
+
+Request export
+   |
+Create job
+   |
+Worker generates Excel
+   |
+Store file temporarily
+   |
+Return signed download URL
+   |
+Expire download
+
+Every export must be permission checked.
+
+============================================================
+44. WEB ADMIN DASHBOARD
+============================================================
+
+The Next.js dashboard must support:
+
+- Dashboard
+- Visits
+- Inspections
+- Assets
+- Corrective Actions
+- Reports
+- Employees
+- Branches
+- Regions
+- Areas
+- Organization
+- Users
+- Roles
+- Audit Logs
+
+Access must be role-based.
+
+Do not rely on frontend hiding buttons for security.
+
+Backend authorization is mandatory.
+
+============================================================
+45. DASHBOARD PERFORMANCE
+============================================================
+
+Use:
+
+TanStack Query
+server-side pagination
+server-side filtering
+proper caching
+debounced search
+
+Avoid:
+
+loading entire database datasets into browser.
+
+Dashboard metrics should use optimized SQL queries.
+
+============================================================
+46. API DOCUMENTATION
+============================================================
+
+Use FastAPI OpenAPI.
+
+Production documentation may be:
+
+- protected
+OR
+- disabled publicly
+
+depending on company security requirements.
+
+Do not expose internal API documentation publicly without authorization.
+
+============================================================
+47. TESTING
+============================================================
+
+Create tests for:
+
+AUTH
+- login
+- refresh
+- logout
+- invalid credentials
+- inactive users
+
+AUTHORIZATION
+- role permissions
+- region scope
+- area scope
+- branch scope
+
+VISITS
+- create
+- update
+- submit
+- reject
+- approve
+- invalid transitions
+
+CHECKLIST
+- required items
+- optional items
+- role visibility
+- completion validation
+
+PHOTOS
+- upload
+- duplicate upload
+- invalid file
+- oversized file
+- unauthorized access
+
+ASSETS
+- asset creation
+- asset verification
+- OCR result
+
+SYNC
+- retry
+- duplicate requests
+- offline-to-online sync
+- conflict handling
+
+EXPORTS
+- authorization
+- generation
+- download
+
+DATABASE
+- migrations
+- constraints
+
+============================================================
+48. MOBILE TESTING
+============================================================
+
+Test real scenarios:
+
+Scenario 1:
+
+Start visit
+→ offline
+→ complete checklist
+→ capture 20 photos
+→ close app
+→ reopen
+→ reconnect
+→ synchronize
+
+Expected:
+NO DATA LOSS.
+
+Scenario 2:
+
+Upload photo
+→ network disconnects halfway
+
+Expected:
+upload retries.
+
+Scenario 3:
+
+Same request sent twice.
+
+Expected:
+no duplicate record.
+
+Scenario 4:
+
+User attempts unauthorized branch.
+
+Expected:
+server rejects request.
+
+Scenario 5:
+
+User logs out.
+
+Expected:
+tokens/session removed securely.
+
+============================================================
+49. PRODUCTION BUILD
+============================================================
+
+The mobile application must NOT use Expo Go for production users.
+
+Use EAS production builds.
+
+Create:
+
+eas.json
+
+with:
+
+development
+preview
+production
+
+Production Android:
+
+AAB
+
+Production iOS:
+
+IPA / App Store distribution
+
+Configure:
+
+- Android package name
+- iOS bundle identifier
+- app version
+- build number/versionCode
+- app icon
+- splash screen
+- permissions
+- camera permission
+- photo permission
+- network security
+- environment configuration
+
+============================================================
+50. MOBILE APP ENVIRONMENT
+============================================================
+
+Never hardcode:
+
+API URL
+JWT secret
+storage credentials
+admin credentials
+
+The mobile app may contain only public configuration such as:
+
+API_BASE_URL
+
+Example:
+
+DEV:
+https://api-dev.company.com
+
+STAGING:
+https://api-staging.company.com
+
+PRODUCTION:
+https://api.company.com
+
+============================================================
+51. ANDROID PRODUCTION
+============================================================
+
+Configure:
+
+- release signing
+- package identifier
+- versionCode
+- permissions
+- camera
+- photo access
+- network configuration
+- app icon
+- splash screen
+
+Generate:
+
+Production AAB
+
+Test it on physical Android devices before release.
+
+Do not assume emulator testing is sufficient.
+
+============================================================
+52. RELEASE PROCESS
+============================================================
+
+Use:
+
+Development
+    ↓
+Pull Request
+    ↓
+Automated Tests
+    ↓
+Code Review
+    ↓
+Staging
+    ↓
+QA
+    ↓
+Production
+
+Mobile:
+
+Development build
+    ↓
+Preview build
+    ↓
+Internal testing
+    ↓
+Production build
+    ↓
+Google Play internal/closed testing
+    ↓
+Production release
+
+============================================================
+53. CI/CD
+============================================================
+
+Create CI/CD pipelines.
+
+Backend pipeline:
+
+lint
+→ type check
+→ tests
+→ Docker build
+→ security scan
+→ push image
+→ deploy staging
+
+Production deployment requires approval.
+
+Mobile pipeline:
+
+lint
+→ TypeScript
+→ tests
+→ Expo/EAS build
+→ internal distribution
+→ production release
+
+============================================================
+54. DATABASE DEPLOYMENT
+============================================================
+
+Production deployment:
+
+1. Backup database
+2. Deploy application
+3. Run Alembic migration
+4. Verify migration
+5. Start/restart application
+6. Run health checks
+7. Run smoke tests
+8. Verify logs
+9. Verify worker
+10. Verify database
+11. Verify object storage
+
+If any critical step fails:
+
+STOP deployment.
+
+============================================================
+55. ROLLBACK
+============================================================
+
+Create rollback procedures for:
+
+- backend
+- frontend
+- database migrations
+- mobile releases
+
+Do NOT automatically downgrade database migrations without a safe,
+tested rollback strategy.
+
+Prefer forward-compatible migrations.
+
+============================================================
+56. PRODUCTION SECURITY CHECKLIST
+============================================================
+
+Before production approval:
+
+[ ] HTTPS enabled
+[ ] HTTP redirects to HTTPS
+[ ] HSTS
+[ ] Production secrets generated
+[ ] Default passwords removed
+[ ] DEBUG=false
+[ ] CORS restricted
+[ ] PostgreSQL not public
+[ ] Redis not public
+[ ] Object storage private
+[ ] Signed URLs
+[ ] JWT secrets secure
+[ ] Refresh token security
+[ ] Rate limiting
+[ ] Upload limits
+[ ] File validation
+[ ] Authorization tested
+[ ] Audit logging
+[ ] Backup configured
+[ ] Restore tested
+[ ] Monitoring enabled
+[ ] Error logging enabled
+[ ] Disk monitoring
+[ ] Health checks
+[ ] Docker containers non-root
+[ ] Security updates
+[ ] Mobile production signing
+[ ] Production API URL configured
+[ ] Offline mode tested
+[ ] Photo sync tested
+[ ] OCR worker tested
+[ ] Excel export tested
+
+============================================================
+57. PRODUCTION DIRECTORY STRUCTURE
+============================================================
+
+Target structure:
+
+project/
+│
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   ├── models/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   ├── repositories/
+│   │   ├── workers/
+│   │   ├── storage/
+│   │   ├── security/
+│   │   ├── utils/
+│   │   └── main.py
+│   │
+│   ├── alembic/
+│   ├── tests/
+│   ├── Dockerfile
+│   └── requirements.txt
+│
+├── web/
+│   ├── app/
+│   ├── components/
+│   ├── lib/
+│   ├── hooks/
+│   ├── types/
+│   ├── Dockerfile
+│   └── package.json
+│
+├── mobile/
+│   ├── app/
+│   ├── components/
+│   ├── db/
+│   ├── sync/
+│   ├── services/
+│   ├── storage/
+│   ├── hooks/
+│   ├── types/
+│   ├── app.json
+│   ├── eas.json
+│   └── package.json
+│
+├── infrastructure/
+│   ├── nginx/
+│   ├── docker/
+│   └── monitoring/
+│
+├── deploy/
+│   ├── setup.sh
+│   ├── backup.sh
+│   ├── restore.sh
+│   ├── deploy.sh
+│   └── rollback.sh
+│
+├── docker-compose.yml
+├── docker-compose.prod.yml
+├── .env.example
+└── README.md
+
+============================================================
+58. DO NOT OVERENGINEER
+============================================================
+
+This is a 50–100 user system.
+
+DO NOT introduce Kubernetes unless there is a real requirement.
+
+DO NOT introduce dozens of microservices.
+
+DO NOT introduce Kafka unless there is a demonstrated requirement.
+
+DO NOT introduce unnecessary cloud services.
+
+Prefer:
+
+- modular monolith FastAPI
+- one worker service
+- PostgreSQL
+- Redis
+- object storage
+- Next.js
+- Expo/React Native
+- nginx/Cloudflare
+
+This is sufficient for the expected scale.
+
+============================================================
+59. EXPECTED PRODUCTION DEPLOYMENT
+============================================================
+
+Recommended initial production topology:
+
+                 Cloudflare
+                     |
+                   HTTPS
+                     |
+                   nginx
+                /          \
+             Next.js      FastAPI
+                            |
+              +-------------+-------------+
+              |             |             |
+         PostgreSQL       Redis       S3/MinIO
+                            |
+                         Worker
+                            |
+                         Tesseract
+
+All services may initially run on one properly sized Linux server
+EXCEPT managed PostgreSQL/object storage if the company prefers managed
+services.
+
+The architecture must allow PostgreSQL and object storage to be moved
+to managed infrastructure later without rewriting the application.
+
+============================================================
+60. OBSERVABILITY
+============================================================
+
+Implement monitoring for:
+
+- API uptime
+- response time
+- 5xx errors
+- database connection count
+- disk usage
+- memory
+- CPU
+- Redis
+- worker
+- OCR failures
+- photo upload failures
+- synchronization failures
+
+Create alerts for:
+
+- server down
+- disk > 80%
+- database failure
+- worker stopped
+- repeated OCR failures
+- repeated upload failures
+- high API error rate
+- backup failure
+
+============================================================
+61. FINAL ACCEPTANCE TEST
+============================================================
+
+Do not declare the project production-ready until these scenarios work.
+
+TEST 1:
+100 users can authenticate.
+
+TEST 2:
+Multiple users can perform visits concurrently.
+
+TEST 3:
+User can perform complete visit offline.
+
+TEST 4:
+20+ photos can be captured during an offline visit.
+
+TEST 5:
+All photos synchronize after network recovery.
+
+TEST 6:
+No duplicate records occur during retry.
+
+TEST 7:
+OCR runs asynchronously.
+
+TEST 8:
+Unauthorized user cannot access another branch.
+
+TEST 9:
+Unauthorized user cannot access another region.
+
+TEST 10:
+Admin can review inspection.
+
+TEST 11:
+Corrective actions work.
+
+TEST 12:
+Excel export works.
+
+TEST 13:
+Database backup can be restored.
+
+TEST 14:
+Server restart does not lose data.
+
+TEST 15:
+Worker restart does not lose queued work.
+
+TEST 16:
+Mobile app restart does not lose an unfinished visit.
+
+TEST 17:
+Production HTTPS works.
+
+TEST 18:
+Expired access token is refreshed correctly.
+
+TEST 19:
+Deactivated user cannot access the API.
+
+TEST 20:
+Audit trail records critical operations.
+
+============================================================
+62. IMPLEMENTATION RULE
+============================================================
+
+Before changing code:
+
+1. Inspect repository.
+2. Inspect current database models.
+3. Inspect current API routes.
+4. Inspect current mobile architecture.
+5. Inspect current Docker configuration.
+6. Inspect current authentication.
+7. Inspect current photo storage.
+8. Inspect current OCR.
+9. Inspect current migrations.
+10. Inspect current tests.
+
+Then create a production-gap report:
+
+CRITICAL
+HIGH
+MEDIUM
+LOW
+
+Do NOT blindly modify everything.
+
+Implement in this order:
+
+PHASE 1
+Security + authentication + authorization
+
+PHASE 2
+Database integrity + migrations
+
+PHASE 3
+Object storage + photo pipeline
+
+PHASE 4
+Offline mobile database + sync engine
+
+PHASE 5
+Background worker + OCR
+
+PHASE 6
+Audit logging
+
+PHASE 7
+Monitoring + logging
+
+PHASE 8
+Backups + restore
+
+PHASE 9
+Docker production configuration
+
+PHASE 10
+CI/CD
+
+PHASE 11
+Mobile production build
+
+PHASE 12
+Load testing + acceptance testing
+
+============================================================
+63. IMPORTANT CODING RULES
+============================================================
+
+Do not:
+
+- rewrite working modules unnecessarily
+- break existing API contracts
+- remove existing business rules
+- remove role restrictions
+- remove audit functionality
+- store production secrets in Git
+- expose PostgreSQL publicly
+- expose Redis publicly
+- trust mobile-supplied roles
+- store passwords in plaintext
+- store tokens insecurely
+- use Expo Go for production distribution
+- lose offline data
+- silently discard failed uploads
+- run heavy OCR inside API requests
+- put huge photo blobs into PostgreSQL unnecessarily
+- use unlimited API queries
+- disable security features just to make development easier
+
+Always:
+
+- validate on server
+- make operations idempotent
+- log important events
+- write tests
+- use migrations
+- handle failures
+- provide retries
+- maintain backward compatibility where possible
+- document deployment
+- document rollback
+- document backup/restore
+
+============================================================
+64. FINAL DELIVERABLES
+============================================================
+
+At the end, produce:
+
+1. Production architecture document
+2. Updated repository
+3. Production Docker Compose
+4. Environment variable documentation
+5. Database migration strategy
+6. Object storage implementation
+7. Offline mobile sync implementation
+8. OCR worker
+9. Authentication hardening
+10. Authorization implementation
+11. Audit logging
+12. Monitoring/health checks
+13. Backup scripts
+14. Restore scripts
+15. Deployment script
+16. Rollback documentation
+17. CI/CD configuration
+18. EAS configuration
+19. Android production AAB build instructions
+20. Testing documentation
+21. Security checklist
+22. Production runbook
+23. README with complete deployment instructions
+
+============================================================
+65. DEFINITION OF DONE
+============================================================
+
+The system is considered production-ready only when:
+
+- 50–100 users can use it concurrently
+- mobile works reliably on poor networks
+- offline visits cannot lose data
+- photos are reliably uploaded
+- failed uploads retry
+- OCR is asynchronous
+- database is protected
+- photos are protected
+- roles are enforced server-side
+- audit logs exist
+- backups work
+- restore has been tested
+- monitoring exists
+- production secrets are protected
+- HTTPS works
+- production Docker deployment works
+- mobile production build works
+- staging environment works
+- CI/CD works
+- automated tests pass
+- smoke tests pass
+- rollback procedure exists
+- no critical security issue remains
+
+Do not claim "production ready" merely because the application starts.
+
+Production readiness must be demonstrated through the acceptance tests above.
