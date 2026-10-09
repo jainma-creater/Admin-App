@@ -12,6 +12,7 @@ import {
   Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { StatusBar } from "expo-status-bar";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../lib/api";
@@ -153,6 +154,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar style="light" />
       <FlatList
         contentContainerStyle={{ paddingBottom: 32 }}
         refreshControl={

@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useState, useMemo } from "react";
 import { LinearGradient } from "expo-linear-gradient";
+import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../lib/api";
 import { statusLabel, statusColor, DONE_STATUSES, EDITABLE_STATUSES } from "../../../lib/status";
@@ -94,6 +95,7 @@ export default function VisitsScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar style="light" />
       <LinearGradient
         colors={["#1E40AF", "#2563EB", "#3B82F6"]}
         start={{ x: 0, y: 0 }}

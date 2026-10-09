@@ -17,6 +17,7 @@ import { CameraView, useCameraPermissions, type CameraType, type FlashMode } fro
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as FileSystem from "expo-file-system/legacy";
+import { StatusBar } from "expo-status-bar";
 import { api, getErrorMessage } from "../../lib/api";
 import { savePhotoOffline, getPendingSyncCount } from "../../lib/offline";
 import { useNetworkStatus } from "../../lib/nativeNetwork";
@@ -291,6 +292,7 @@ export default function CameraScreen() {
   if (!permission.granted) {
     return (
       <View style={[styles.container, styles.center]}>
+        <StatusBar style="light" />
         <Text style={{ fontSize: 40, marginBottom: 16 }}>📷</Text>
         <Text style={styles.permTitle}>Camera Permission Required</Text>
         <Text style={styles.permText}>
@@ -323,6 +325,7 @@ export default function CameraScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar style="light" />
       {!network.isConnected && (
         <View style={styles.offlineBanner}>
           <Text style={styles.offlineBannerText}>

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { StatusBar } from "expo-status-bar";
 import { api, getErrorMessage } from "../../lib/api";
 import { useAuth } from "../../stores/auth";
 import { BrandLogo } from "../../components/BrandLogo";
@@ -187,6 +188,7 @@ export default function Register() {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <StatusBar style="light" />
       <LinearGradient colors={[...authGradient]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
         <ScrollView
           contentContainerStyle={{ paddingBottom: 34, paddingTop: headerTop.paddingTop + 12 }}

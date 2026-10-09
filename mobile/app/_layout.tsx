@@ -108,7 +108,7 @@ export default function RootLayout() {
     <AppErrorBoundary>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <StatusBar style="light" />
+          <StatusBar style="dark" />
           <AuthGate />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(app)" />

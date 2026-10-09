@@ -11,6 +11,7 @@ import {
   Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { StatusBar } from "expo-status-bar";
 import {
   getSyncSummary,
   syncAll,
@@ -64,6 +65,7 @@ export default function PendingSyncScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar style="light" />
       <LinearGradient
         colors={["#1e3a8a", "#2563eb", "#3b82f6"]}
         start={{ x: 0, y: 0 }}

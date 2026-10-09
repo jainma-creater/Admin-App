@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useState, useEffect } from "react";
 import { LinearGradient } from "expo-linear-gradient";
+import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { api, API_URL, getErrorMessage } from "../../../lib/api";
 import { useAuth } from "../../../stores/auth";
@@ -128,6 +129,7 @@ export default function ProfileScreen() {
       }}
       showsVerticalScrollIndicator={false}
     >
+      <StatusBar style="light" />
       {/* Header Profile Card */}
       <LinearGradient
         colors={["#1E40AF", "#2563EB", "#3B82F6"]}
