@@ -10,15 +10,17 @@ import {
   RefreshControl,
   TextInput,
   Platform,
-  useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useState, useEffect, useMemo, useRef } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../stores/auth";
 import { getPendingSyncCount, syncAll } from "../../../lib/offline";
 import { useNetworkStatus } from "../../../lib/nativeNetwork";
 import { useHeaderTop } from "../../../lib/safeArea";
+import { useResponsive } from "../../../lib/theme";
+import { colors, radius, spacing, type, shadows, typography } from "../../../lib/theme";
 
 function greeting(firstName?: string) {
   const h = new Date().getHours();
@@ -27,19 +29,14 @@ function greeting(firstName?: string) {
 }
 
 const STAT_CARDS = [
-  { key: "total_branches", label: "Branches", icon: "🏢", tint: "#2563eb", bg: "#eff6ff" },
-  { key: "total_checklists", label: "Total Visits", icon: "📋", tint: "#7c3aed", bg: "#f5f3ff" },
-  { key: "completed_checklists", label: "Completed", icon: "✅", tint: "#059669", bg: "#ecfdf5" },
-  { key: "pending_checklists", label: "Pending", icon: "⏳", tint: "#d97706", bg: "#fffbeb" },
+  { key: "total_branches", label: "Branches", icon: "🏢", tint: colors.brand },
+  { key: "total_checklists", label: "Total Visits", icon: "📋", tint: "#7C3AED" },
+  { key: "completed_checklists", label: "Completed", icon: "✅", tint: colors.success },
+  { key: "pending_checklists", label: "Pending", icon: "⏳", tint: colors.warning },
 ] as const;
 
 export default function HomeScreen() {
-  const { width: SCREEN_WIDTH } = useWindowDimensions();
-  // 2 columns if width >= 360, else 1 column (with comfortable min width ~150px)
-  const cols = SCREEN_WIDTH >= 360 ? 2 : 1;
-  const cardBasis = cols === 2 ? "48%" : "100%";
-  const cardGap = 10;
-
+  const { isSmall, isTablet } = useResponsive();
   const { user } = useAuth();
   const router = useRouter();
   const network = useNetworkStatus();
@@ -47,6 +44,9 @@ export default function HomeScreen() {
   const [pendingSync, setPendingSync] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const statCols = isTablet ? 4 : 2;
+  const statBasis = isTablet ? "23%" : isSmall ? "47%" : "47%";
 
   const {
     data: stats,
@@ -133,8 +133,8 @@ export default function HomeScreen() {
   if (loading && !branches) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={{ marginTop: 12, color: "#64748b", fontWeight: "600" }}>Loading Dashboard...</Text>
+        <ActivityIndicator size="large" color={colors.brand} />
+        <Text style={styles.loadingText}>Loading Dashboard...</Text>
       </View>
     );
   }
@@ -155,24 +155,27 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <FlatList
         contentContainerStyle={{ paddingBottom: 32 }}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refreshAll} />}
+        refreshControl={
+          <RefreshControl refreshing={isRefetching} onRefresh={refreshAll} tintColor={colors.brand} />
+        }
         data={filteredBranches}
         keyExtractor={(item: any) => item.id}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <>
-            {/* Executive Gradient Header */}
             <LinearGradient
-              colors={["#1e3a8a", "#2563eb", "#3b82f6"]}
+              colors={["#1E40AF", "#2563EB", "#3B82F6"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={[styles.hero, headerTop]}
             >
               <View style={styles.topRow}>
                 <View style={{ flex: 1, paddingRight: 10 }}>
-                  <Text style={styles.heroGreeting} numberOfLines={1}>{greeting(user?.first_name)}</Text>
+                  <Text style={styles.heroGreeting} numberOfLines={1}>
+                    {greeting(user?.first_name)}
+                  </Text>
                   <View style={styles.heroSubRow}>
-                    <Text style={styles.heroSub}>Branch Inspection & Compliance</Text>
+                    <Text style={styles.heroSub}>Branch Inspection &amp; Compliance</Text>
                     {user?.roles?.[0]?.name ? (
                       <View style={styles.heroRolePill}>
                         <Text style={styles.heroRolePillText}>{user.roles[0].name.replace("_", " ")}</Text>
@@ -188,7 +191,7 @@ export default function HomeScreen() {
                   )}
                   <View style={styles.avatarCircle}>
                     <LinearGradient
-                      colors={user?.first_name ? ["#3b82f6", "#38bdf8"] : ["#475569", "#64748b"]}
+                      colors={user?.first_name ? ["#3B82F6", "#38BDF8"] : ["#475569", "#64748B"]}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={styles.avatarInner}
@@ -208,8 +211,11 @@ export default function HomeScreen() {
                   onPress={() => router.push("/pending-sync")}
                   disabled={isSyncing}
                 >
+                  <Ionicons name={isSyncing ? "sync" : "cloud-upload-outline"} size={16} color="#fff" />
                   <Text style={styles.syncCardText}>
-                    {isSyncing ? "🔄 Syncing data with server..." : `🔄 ${pendingSync} item(s) pending sync · Open queue`}
+                    {isSyncing
+                      ? "Syncing data with server..."
+                      : `${pendingSync} item(s) pending sync · Open queue`}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -227,7 +233,7 @@ export default function HomeScreen() {
                   }}
                 >
                   <Text style={styles.rejectionAlertTitle}>
-                    🚨 Action Required: {unreadRejections.length} Photo Evidence Rejected
+                    Action Required: {unreadRejections.length} Photo Evidence Rejected
                   </Text>
                   <Text style={styles.rejectionAlertBody}>
                     {unreadRejections[0].body || "Reviewer reported a quality issue. Tap to review and retake."}
@@ -235,50 +241,52 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               )}
 
-{/* Stat Cards Grid */}
-            <View style={styles.statsGrid}>
-              {STAT_CARDS.map((c) => (
-                <View key={c.key} style={[styles.statCard, { flexBasis: cardBasis }]}>
-                    <View style={[styles.statIconBox, { backgroundColor: c.bg }]}>
+              {/* Stat Cards Grid */}
+              <View style={styles.statsGrid}>
+                {STAT_CARDS.map((c) => (
+                  <View key={c.key} style={[styles.statCard, { width: statBasis }]}>
+                    <View style={styles.statTop}>
                       <Text style={styles.statIcon}>{c.icon}</Text>
+                      <View style={[styles.statAccent, { backgroundColor: c.tint }]} />
                     </View>
-                    <Text style={[styles.statValue, { color: c.tint }]}>
-                      {stats?.[c.key] ?? 0}
-                    </Text>
-                    <Text style={styles.statLabel}>{c.label}</Text>
+                    <Text style={[styles.statValue, { color: c.tint }]}>{stats?.[c.key] ?? 0}</Text>
+                    <Text style={styles.statLabel} numberOfLines={2}>{c.label}</Text>
                   </View>
                 ))}
               </View>
             </LinearGradient>
 
-            {/* Search and Section Header */}
-            <View style={styles.searchSection}>
+            <View style={[styles.searchSection, isTablet && { paddingHorizontal: spacing.xxl }]}>
               <View style={styles.searchBox}>
-                <Text style={styles.searchIcon}>🔍</Text>
+                <Ionicons name="search" size={18} color={colors.textFaint} />
                 <TextInput
                   style={styles.searchInput}
                   placeholder="Search branch by name, code or city..."
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor={colors.textFaint}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   clearButtonMode="while-editing"
                 />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => setSearchQuery("")}>
-                    <Text style={{ color: "#94a3b8", paddingHorizontal: 6 }}>✕</Text>
+                {searchQuery.length > 0 && Platform.OS !== "ios" && (
+                  <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close-circle" size={18} color={colors.textFaint} />
                   </TouchableOpacity>
                 )}
               </View>
 
               <View style={styles.sectionRow}>
                 <Text style={styles.sectionTitle}>All Branches</Text>
-                <Text style={styles.sectionCount}>{filteredBranches.length} branch{filteredBranches.length === 1 ? "" : "es"}</Text>
+                <Text style={styles.sectionCount}>
+                  {filteredBranches.length} branch{filteredBranches.length === 1 ? "" : "es"}
+                </Text>
                 <View style={{ flex: 1 }} />
                 <TouchableOpacity
                   style={styles.addBranchButton}
                   onPress={() => router.push({ pathname: "/branch/add" })}
+                  activeOpacity={0.85}
                 >
-                  <Text style={styles.addBranchText}>＋ Add Branch</Text>
+                  <Ionicons name="add" size={16} color={colors.brandDark} />
+                  <Text style={styles.addBranchText}>Add Branch</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -290,34 +298,30 @@ export default function HomeScreen() {
             activeOpacity={0.8}
             onPress={() => router.push({ pathname: "/branch/[id]", params: { id: item.id } })}
           >
-            <LinearGradient
-              colors={["#eff6ff", "#dbeafe"]}
-              style={styles.logoBox}
-            >
+            <View style={styles.logoBox}>
               <Text style={styles.logoText}>🏢</Text>
-            </LinearGradient>
+            </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.branchName}>{item.name}</Text>
+              <Text style={styles.branchName} numberOfLines={1}>{item.name}</Text>
               <View style={styles.metaRow}>
                 {item.code ? <Text style={styles.codeChip}>{item.code}</Text> : null}
-                <Text style={styles.branchMeta}>
+                <Text style={styles.branchMeta} numberOfLines={1}>
                   {[item.city, item.state].filter(Boolean).join(", ") || "Active Branch"}
                 </Text>
               </View>
               {item.address ? (
-                <Text style={styles.addressText} numberOfLines={1}>
-                  📍 {item.address}
-                </Text>
+                <View style={styles.addressRow}>
+                  <Ionicons name="location-outline" size={12} color={colors.textFaint} />
+                  <Text style={styles.addressText} numberOfLines={1}>{item.address}</Text>
+                </View>
               ) : null}
             </View>
-            <View style={styles.chevronCircle}>
-              <Text style={styles.chevron}>›</Text>
-            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textFaint} />
           </TouchableOpacity>
         )}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={{ fontSize: 32, marginBottom: 8 }}>🏢</Text>
+            <Text style={{ fontSize: 34, marginBottom: 8 }}>🏢</Text>
             <Text style={styles.emptyText}>
               {searchQuery ? `No branches match "${searchQuery}"` : "No branches available."}
             </Text>
@@ -329,15 +333,16 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8fafc" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  container: { flex: 1, backgroundColor: colors.bg },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, backgroundColor: colors.bg },
+  loadingText: { marginTop: 12, color: colors.textMuted, fontWeight: "600" },
 
   hero: {
-    paddingHorizontal: 18,
+    paddingHorizontal: spacing.lg,
     paddingTop: Platform.OS === "ios" ? 54 : 36,
-    paddingBottom: 28,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+    paddingBottom: spacing.xxl,
+    borderBottomLeftRadius: radius.xxl,
+    borderBottomRightRadius: radius.xxl,
   },
   topRow: {
     flexDirection: "row",
@@ -351,214 +356,171 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 3,
   },
-  heroGreeting: { color: "#fff", fontSize: 22, fontWeight: "800", letterSpacing: 0.2 },
-  heroSub: { color: "#bfdbfe", fontSize: 13 },
+  heroGreeting: { color: "#fff", fontSize: type.heading, fontWeight: "800", letterSpacing: 0.2 },
+  heroSub: { color: "#DBEAFE", fontSize: type.label },
   headerRight: { alignItems: "flex-end", gap: 8 },
   avatarCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.4)",
+    borderColor: "rgba(255,255,255,0.45)",
     overflow: "hidden",
   },
   avatarInner: { flex: 1, alignItems: "center", justifyContent: "center" },
-  avatarText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "800",
-    textTransform: "uppercase",
-  },
+  avatarText: { color: "#fff", fontSize: 15, fontWeight: "800", textTransform: "uppercase" },
   heroRolePill: {
-    backgroundColor: "rgba(255,255,255,0.25)",
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    borderRadius: radius.pill,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.35)",
   },
-  heroRolePillText: { color: "#fff", fontSize: 10.5, fontWeight: "800", textTransform: "uppercase" },
+  heroRolePillText: { color: "#fff", fontSize: type.caption, fontWeight: "800", textTransform: "uppercase" },
   offlineBadge: {
-    backgroundColor: "#f59e0b",
-    borderRadius: 8,
+    backgroundColor: colors.warning,
+    borderRadius: radius.pill,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  offlineBadgeText: { color: "#fff", fontSize: 11, fontWeight: "700" },
+  offlineBadgeText: { color: "#fff", fontSize: type.small, fontWeight: "700" },
 
   syncCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: 12,
+    borderRadius: radius.md,
     paddingVertical: 10,
     paddingHorizontal: 14,
     marginTop: 14,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.3)",
   },
-  syncCardText: {
-    color: "#fff",
-    fontSize: 12.5,
-    fontWeight: "700",
-    textAlign: "center",
-  },
+  syncCardText: { color: "#fff", fontSize: type.label, fontWeight: "700", textAlign: "center" },
 
   rejectionAlertCard: {
-    backgroundColor: "#fff1f2",
-    borderRadius: 14,
+    backgroundColor: colors.dangerSubtle,
+    borderRadius: radius.md,
     paddingVertical: 12,
     paddingHorizontal: 14,
     marginTop: 14,
     borderWidth: 1.5,
-    borderColor: "#f43f5e",
-    shadowColor: "#f43f5e",
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-    elevation: 3,
+    borderColor: colors.danger,
   },
-  rejectionAlertTitle: {
-    color: "#9f1239",
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  rejectionAlertBody: {
-    color: "#be123c",
-    fontSize: 11.5,
-    marginTop: 3,
-    lineHeight: 16,
-  },
+  rejectionAlertTitle: { color: "#9F1239", fontSize: type.label, fontWeight: "800" },
+  rejectionAlertBody: { color: "#BE123C", fontSize: type.small, marginTop: 3, lineHeight: 16 },
 
   statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
-    marginTop: 18,
+    marginTop: spacing.xl,
   },
   statCard: {
-    flexGrow: 1,
-    flexBasis: "46%",
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    padding: 12,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 6,
-    elevation: 3,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    ...shadows.sm,
   },
-  statIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  statTop: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
+    justifyContent: "space-between",
+    marginBottom: 8,
   },
-  statIcon: { fontSize: 16 },
-  statValue: { fontSize: 18, fontWeight: "800" },
-  statLabel: { fontSize: 10.5, color: "#64748b", marginTop: 2, fontWeight: "600", textAlign: "center" },
+  statIcon: { fontSize: 18 },
+  statAccent: { width: 9, height: 9, borderRadius: 5 },
+  statValue: { fontSize: 22, fontWeight: "800" },
+  statLabel: { fontSize: type.caption, color: colors.textMuted, marginTop: 2, fontWeight: "600" },
 
-  searchSection: {
-    paddingHorizontal: 16,
-    marginTop: 18,
-  },
+  searchSection: { paddingHorizontal: spacing.lg, marginTop: spacing.xl },
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
+    gap: 8,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
     paddingHorizontal: 14,
-    paddingVertical: Platform.OS === "ios" ? 12 : 8,
+    paddingVertical: Platform.OS === "ios" ? 12 : 9,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    shadowColor: "#000",
-    shadowOpacity: 0.03,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 1,
+    borderColor: colors.border,
+    ...shadows.input,
   },
-  searchIcon: { fontSize: 15, marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 14, color: "#0f172a" },
+  searchInput: { flex: 1, fontSize: type.body, color: colors.text },
 
   sectionRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 18,
-    marginBottom: 8,
+    marginTop: spacing.xl,
+    marginBottom: spacing.sm,
     paddingHorizontal: 4,
     gap: 8,
   },
-  sectionTitle: { fontSize: 16, fontWeight: "800", color: "#0f172a" },
-  sectionCount: { fontSize: 12, fontWeight: "600", color: "#64748b" },
+  sectionTitle: { fontSize: type.subheading, fontWeight: "800", color: colors.text },
+  sectionCount: { fontSize: type.small, fontWeight: "600", color: colors.textMuted },
   addBranchButton: {
-    backgroundColor: "#eff6ff",
-    borderColor: "#bfdbfe",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    backgroundColor: colors.brandSubtle,
+    borderColor: "#BFDBFE",
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: radius.sm,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
   },
-  addBranchText: { color: "#1d4ed8", fontSize: 13, fontWeight: "700" },
+  addBranchText: { color: colors.brandDark, fontSize: type.label, fontWeight: "700" },
 
   card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 14,
-    marginHorizontal: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginHorizontal: spacing.lg,
     marginTop: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     borderWidth: 1,
-    borderColor: "#f1f5f9",
-    shadowColor: "#0f172a",
-    shadowOpacity: 0.04,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 2,
+    borderColor: colors.border,
+    ...shadows.input,
   },
   logoBox: {
     width: 48,
     height: 48,
-    borderRadius: 14,
+    borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: colors.brandSubtle,
   },
   logoText: { fontSize: 22 },
-  branchName: { fontSize: 15.5, fontWeight: "700", color: "#0f172a" },
+  branchName: { fontSize: 15.5, fontWeight: "700", color: colors.text },
   metaRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6, marginTop: 4 },
   codeChip: {
-    fontSize: 11,
+    fontSize: type.small,
     fontWeight: "700",
-    color: "#2563eb",
-    backgroundColor: "#eff6ff",
-    borderRadius: 6,
+    color: colors.brand,
+    backgroundColor: colors.brandSubtle,
+    borderRadius: radius.xs,
     paddingHorizontal: 6,
     paddingVertical: 2,
     overflow: "hidden",
   },
-  branchMeta: { fontSize: 12.5, color: "#64748b" },
-  addressText: { fontSize: 11.5, color: "#94a3b8", marginTop: 4 },
-  chevronCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#f8fafc",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  chevron: { fontSize: 18, color: "#94a3b8", fontWeight: "700" },
+  branchMeta: { fontSize: type.label, color: colors.textMuted },
+  addressRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  addressText: { fontSize: type.small, color: colors.textFaint, flex: 1 },
 
   emptyState: { alignItems: "center", paddingVertical: 48 },
-  emptyText: { color: "#64748b", fontSize: 14, fontWeight: "600" },
-  errorTitle: { fontSize: 18, fontWeight: "700", color: "#0f172a" },
-  errorHint: { fontSize: 13, color: "#64748b", marginTop: 4 },
+  emptyText: { color: colors.textMuted, fontSize: type.body, fontWeight: "600" },
+  errorTitle: { fontSize: type.subheading, fontWeight: "700", color: colors.text },
+  errorHint: { fontSize: type.label, color: colors.textMuted, marginTop: 4 },
   retryButton: {
-    backgroundColor: "#2563eb",
-    borderRadius: 10,
+    backgroundColor: colors.brand,
+    borderRadius: radius.sm,
     paddingHorizontal: 20,
     paddingVertical: 10,
     marginTop: 16,

@@ -2,35 +2,36 @@ import { useState } from "react";
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
   Alert,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { api, getErrorMessage } from "../../lib/api";
+import { BrandLogo } from "../../components/BrandLogo";
+import { FormField, PrimaryButton, LinkText } from "../../components/ui";
+import { colors, radius, spacing, type, authGradient, shadows } from "../../lib/theme";
+import { useHeaderTop } from "../../lib/safeArea";
 
 export default function ForgotPassword() {
   const router = useRouter();
+  const headerTop = useHeaderTop();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleForgotPassword = async () => {
-    if (!email) {
-      setError("Please enter your email");
+    if (!email.trim() || !email.includes("@")) {
+      setError("Please enter a valid email");
       return;
     }
     setError(null);
     setLoading(true);
     try {
-      // TODO: Backend needs to implement /auth/forgot-password endpoint
-      // For now, we'll show a message that this feature is coming
-      // await api.post("/auth/forgot-password", { email });
-      
+      // TODO: Backend needs to implement /auth/forgot-password endpoint.
       Alert.alert(
         "Reset Link Sent",
         "If an account with that email exists, a password reset link has been sent.",
@@ -44,115 +45,70 @@ export default function ForgotPassword() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-      <View style={styles.card}>
-        <Text style={styles.logo}>Branch Visit</Text>
-        <Text style={styles.subtitle}>Reset Your Password</Text>
-
-        <Text style={styles.instruction}>
-          Enter your email and we'll send you a link to reset your password.
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#94a3b8"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-
-        {error && <Text style={styles.error}>{error}</Text>}
-
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleForgotPassword}
-          disabled={loading}
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <LinearGradient colors={[...authGradient]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingVertical: headerTop.paddingTop }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.buttonText}>
-            {loading ? "Sending..." : "Send Reset Link"}
-          </Text>
-        </TouchableOpacity>
+          <View style={styles.card}>
+            <View style={styles.brand}>
+              <BrandLogo size={56} />
+              <Text style={styles.title}>Reset Password</Text>
+            </View>
 
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.replace("/(auth)/login")}
-        >
-          <Text style={styles.backText}>← Back to Sign In</Text>
-        </TouchableOpacity>
-      </View>
-      </ScrollView>
+            <Text style={styles.instruction}>
+              Enter your work email and we'll send you a link to reset your password.
+            </Text>
+
+            <FormField
+              label="Work email"
+              placeholder="you@company.com"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+              error={error}
+            />
+
+            <PrimaryButton
+              label={loading ? "Sending…" : "Send Reset Link"}
+              onPress={handleForgotPassword}
+              loading={loading}
+            />
+
+            <View style={styles.backRow}>
+              <LinkText label="← Back to Sign In" onPress={() => router.replace("/(auth)/login")} />
+            </View>
+          </View>
+        </ScrollView>
+      </LinearGradient>
+      <StatusBar style="light" />
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0f172a",
-    justifyContent: "center",
-    padding: 24,
-  },
+const styles = {
+  flex: { flex: 1 },
+  root: { flex: 1, paddingHorizontal: 22 },
   card: {
-    backgroundColor: "#1e293b",
-    borderRadius: 16,
-    padding: 24,
-  },
-  logo: {
-    color: "#fff",
-    fontSize: 28,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  subtitle: {
-    color: "#fff",
-    textAlign: "center",
-    marginBottom: 8,
-    marginTop: 4,
-    fontSize: 20,
-    fontWeight: "600",
-  },
-  instruction: {
-    color: "#94a3b8",
-    textAlign: "center",
-    marginBottom: 24,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  input: {
-    backgroundColor: "#0f172a",
-    borderRadius: 10,
-    padding: 14,
-    color: "#fff",
-    marginBottom: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
     borderWidth: 1,
-    borderColor: "#334155",
+    borderColor: colors.border,
+    ...shadows.card,
   },
-  button: {
-    backgroundColor: "#2563eb",
-    borderRadius: 10,
-    padding: 16,
-    alignItems: "center",
-    marginTop: 8,
+  brand: { alignItems: "center", marginBottom: 16, gap: 12 },
+  title: { color: colors.text, fontSize: type.heading, fontWeight: "800", letterSpacing: -0.3 },
+  instruction: {
+    color: colors.textMuted,
+    fontSize: type.body,
+    textAlign: "center",
+    marginBottom: spacing.xl,
+    lineHeight: 21,
   },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
-  error: { color: "#f87171", marginBottom: 8 },
-  backButton: {
-    alignItems: "center",
-    marginTop: 16,
-  },
-  backText: {
-    color: "#3b82f6",
-    fontSize: 14,
-  },
-});
+  backRow: { alignItems: "center", marginTop: spacing.xl },
+} as const;

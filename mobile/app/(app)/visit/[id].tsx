@@ -10,13 +10,15 @@ import {
   Alert,
   Image,
   Modal,
+  Platform,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { api, getErrorMessage, getPhotoUrl } from "../../../lib/api";
 import { statusLabel, statusColor, DONE_STATUSES, EDITABLE_STATUSES } from "../../../lib/status";
 import { useState, useCallback, useEffect } from "react";
 import { useHeaderTop } from "../../../lib/safeArea";
-
-
+import { useResponsive } from "../../../lib/theme";
+import { colors, radius, spacing, type, shadows } from "../../../lib/theme";
 
 function photoUri(p: any): string | null {
   const raw = p?.thumbnail_url ?? p?.url ?? null;
@@ -30,6 +32,8 @@ export default function VisitDetail() {
   const router = useRouter();
   const qc = useQueryClient();
   const headerTop = useHeaderTop();
+  const { isTablet, width } = useResponsive();
+  const pad = isTablet ? spacing.xxl : spacing.lg;
   const [previewPhoto, setPreviewPhoto] = useState<any>(null);
 
   const { data: visit, isLoading, isError, refetch } = useQuery({
@@ -37,7 +41,7 @@ export default function VisitDetail() {
     queryFn: async () => (await api.get(`/visits/${id}`)).data,
   });
 
-  const { data: photos, refetch: refetchPhotos, isError: photosError } = useQuery({
+  const { data: photos, refetch: refetchPhotos } = useQuery({
     queryKey: ["visit-photos", id],
     queryFn: async () => (await api.get(`/visits/${id}/photos`)).data,
   });
@@ -61,7 +65,7 @@ export default function VisitDetail() {
   if (isLoading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
@@ -86,22 +90,29 @@ export default function VisitDetail() {
   const isModule = isFixed || isIT;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: pad, maxWidth: 720, width: "100%", alignSelf: "center" }}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={[styles.header, headerTop]}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.back}>← Back</Text>
+        <TouchableOpacity style={styles.backRow} onPress={() => router.back()} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={20} color={colors.brand} />
+          <Text style={styles.back}>Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{visit.branch_name ?? "Branch Visit"}</Text>
-        <Text style={styles.subtitle}>{visit.visit_type_name ?? ""}</Text>
-        <View style={[styles.badge, { backgroundColor: statusColor(visit.status) }]}>
-          <Text style={styles.badgeText}>{statusLabel(visit.status)}</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.subtitle}>{visit.visit_type_name ?? ""}</Text>
+          <View style={[styles.badge, { backgroundColor: statusColor(visit.status) }]}>
+            <Text style={styles.badgeText}>{statusLabel(visit.status)}</Text>
+          </View>
         </View>
       </View>
 
       <View style={styles.progressCard}>
         {isModule ? (
           <>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <View style={styles.rowBetween}>
               <Text style={styles.progressLabel}>
                 {isFixed ? "Fixed asset module" : "IT asset module"}
               </Text>
@@ -115,7 +126,7 @@ export default function VisitDetail() {
           </>
         ) : (
           <>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <View style={styles.rowBetween}>
               <Text style={styles.progressLabel}>Checklist progress</Text>
               <Text style={styles.progressLabel}>
                 {visit.total_items ? Math.round((visit.completed_items / visit.total_items) * 100) : 0}%
@@ -142,11 +153,9 @@ export default function VisitDetail() {
 
       {isDonePhase && (
         <View style={styles.doneCard}>
-          <Text style={styles.doneTitle}>✅ Visit completed</Text>
+          <Text style={styles.doneTitle}>Visit completed</Text>
           {visit.submitted_at && (
-            <Text style={styles.doneRow}>
-              🕒 Submitted on {new Date(visit.submitted_at).toLocaleString()}
-            </Text>
+            <Text style={styles.doneRow}>🕒 Submitted on {new Date(visit.submitted_at).toLocaleString()}</Text>
           )}
           {visit.scheduled_date && (
             <Text style={styles.doneRow}>📅 Visit date: {visit.scheduled_date}</Text>
@@ -174,7 +183,7 @@ export default function VisitDetail() {
       </View>
 
       <Text style={styles.sectionTitle}>
-        📷 Photos from this visit {photoList.length ? `(${photoList.length})` : ""}
+        Photos from this visit {photoList.length ? `(${photoList.length})` : ""}
       </Text>
       {photoList.length === 0 ? (
         <Text style={styles.noPhotos}>No photos yet.</Text>
@@ -183,7 +192,7 @@ export default function VisitDetail() {
           {photoList.map((p: any) => {
             const uri = photoUri(p);
             return uri ? (
-              <TouchableOpacity key={p.id} onPress={() => setPreviewPhoto(p)}>
+              <TouchableOpacity key={p.id} onPress={() => setPreviewPhoto(p)} activeOpacity={0.85}>
                 <Image source={{ uri }} style={styles.photoThumb} />
               </TouchableOpacity>
             ) : null;
@@ -197,44 +206,55 @@ export default function VisitDetail() {
             <TouchableOpacity
               style={styles.primaryButton}
               onPress={() => router.push(`/checklist/${id}`)}
+              activeOpacity={0.9}
             >
-              <Text style={styles.primaryButtonText}>📋 Open Checklist</Text>
+              <Ionicons name="list-outline" size={19} color="#fff" />
+              <Text style={styles.primaryButtonText}>Open Checklist</Text>
             </TouchableOpacity>
           )}
 
           {isFixed && (
             <TouchableOpacity
-              style={[styles.summaryButton, { backgroundColor: "#7c3aed", marginTop: isFixed ? 20 : 10 }]}
+              style={[styles.summaryButton, { backgroundColor: "#7C3AED", marginTop: 20 }]}
               onPress={() => router.push(`/visit/${id}/assets`)}
+              activeOpacity={0.9}
             >
-              <Text style={styles.summaryButtonText}>🪑 Fixed Asset Checklist</Text>
+              <Ionicons name="cube-outline" size={19} color="#fff" />
+              <Text style={styles.summaryButtonText}>Fixed Asset Checklist</Text>
             </TouchableOpacity>
           )}
 
           {isIT && (
             <TouchableOpacity
-              style={[styles.summaryButton, { backgroundColor: "#0891b2", marginTop: isIT ? 20 : 10 }]}
+              style={[styles.summaryButton, { backgroundColor: "#0891B2", marginTop: 20 }]}
               onPress={() => router.push(`/visit/${id}/it-assets`)}
+              activeOpacity={0.9}
             >
-              <Text style={styles.summaryButtonText}>💻 IT Asset Verification</Text>
+              <Ionicons name="laptop-outline" size={19} color="#fff" />
+              <Text style={styles.summaryButtonText}>IT Asset Verification</Text>
             </TouchableOpacity>
           )}
 
           {/* Auto-start: the user never has to think about states. A pre-start
               visit quietly moves to IN_PROGRESS the moment they open it. */}
           {PRE_START.includes(visit.status) && (
-            <AutoStart visitId={id} onStarted={() => {
-              qc.invalidateQueries({ queryKey: ["visit", id] });
-              qc.invalidateQueries({ queryKey: ["visits"] });
-            }} />
+            <AutoStart
+              visitId={id}
+              onStarted={() => {
+                qc.invalidateQueries({ queryKey: ["visit", id] });
+                qc.invalidateQueries({ queryKey: ["visits"] });
+              }}
+            />
           )}
 
           {["IN_PROGRESS", "REWORK_REQUIRED", "RESUBMITTED"].includes(visit.status) && (
             <TouchableOpacity
               style={styles.summaryButton}
               onPress={() => router.push(`/visit/${id}/summary`)}
+              activeOpacity={0.9}
             >
-              <Text style={styles.summaryButtonText}>📝 Review & Submit</Text>
+              <Ionicons name="checkmark-done-outline" size={19} color="#fff" />
+              <Text style={styles.summaryButtonText}>Review &amp; Submit</Text>
             </TouchableOpacity>
           )}
         </>
@@ -244,7 +264,7 @@ export default function VisitDetail() {
       <Modal visible={!!previewPhoto} transparent animationType="fade" onRequestClose={() => setPreviewPhoto(null)}>
         <View style={styles.previewOverlay}>
           <View style={styles.previewTop}>
-            <TouchableOpacity onPress={() => setPreviewPhoto(null)}>
+            <TouchableOpacity onPress={() => setPreviewPhoto(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Text style={styles.previewClose}>✕ Close</Text>
             </TouchableOpacity>
             {previewPhoto && (
@@ -259,22 +279,17 @@ export default function VisitDetail() {
                     },
                   ])
                 }
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Text style={styles.previewDelete}>🗑 Delete</Text>
               </TouchableOpacity>
             )}
           </View>
           {previewPhoto && photoUri(previewPhoto) && (
-            <Image
-              source={{ uri: photoUri(previewPhoto)! }}
-              style={styles.previewImage}
-              resizeMode="contain"
-            />
+            <Image source={{ uri: photoUri(previewPhoto)! }} style={styles.previewImage} resizeMode="contain" />
           )}
           {previewPhoto?.created_at && (
-            <Text style={styles.previewCaption}>
-              {new Date(previewPhoto.created_at).toLocaleString()}
-            </Text>
+            <Text style={styles.previewCaption}>{new Date(previewPhoto.created_at).toLocaleString()}</Text>
           )}
         </View>
       </Modal>
@@ -304,129 +319,94 @@ function AutoStart({ visitId, onStarted }: { visitId: string; onStarted: () => v
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f8fafc" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  header: { paddingHorizontal: 16, paddingTop: 14 },
-  back: { color: "#2563eb", fontSize: 15, fontWeight: "600" },
-  title: { fontSize: 22, fontWeight: "800", color: "#0f172a", marginTop: 8 },
-  subtitle: { fontSize: 14, color: "#64748b", marginTop: 2 },
-  badge: {
-    alignSelf: "flex-start",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginTop: 8,
-  },
-  badgeText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  container: { flex: 1, backgroundColor: colors.bg },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg },
+  header: { paddingTop: 14 },
+  backRow: { flexDirection: "row", alignItems: "center", marginLeft: -4 },
+  back: { color: colors.brand, fontSize: type.body, fontWeight: "600" },
+  title: { fontSize: type.heading, fontWeight: "800", color: colors.text, marginTop: 8 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 6, flexWrap: "wrap" },
+  subtitle: { fontSize: type.label, color: colors.textMuted },
+  badge: { borderRadius: radius.sm, paddingHorizontal: 10, paddingVertical: 3 },
+  badgeText: { color: "#fff", fontSize: type.small, fontWeight: "700" },
+  rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   progressCard: {
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
     marginTop: 14,
-    marginHorizontal: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
-  progressLabel: { fontSize: 13, fontWeight: "600", color: "#475569" },
-  progressTrack: {
-    height: 8,
-    backgroundColor: "#e2e8f0",
-    borderRadius: 4,
-    marginTop: 8,
-    overflow: "hidden",
-  },
-  progressFill: { height: "100%", backgroundColor: "#10b981", borderRadius: 4 },
-  progressText: { fontSize: 13, color: "#64748b", marginTop: 6 },
+  progressLabel: { fontSize: type.label, fontWeight: "600", color: "#475569" },
+  progressTrack: { height: 8, backgroundColor: colors.surfaceAlt, borderRadius: 4, marginTop: 8, overflow: "hidden" },
+  progressFill: { height: "100%", backgroundColor: colors.success, borderRadius: 4 },
+  progressText: { fontSize: type.label, color: colors.textMuted, marginTop: 6 },
   doneCard: {
-    backgroundColor: "#f0fdf4",
-    borderColor: "#a7f3d0",
+    backgroundColor: colors.successSubtle,
+    borderColor: "#A7F3D0",
     borderWidth: 1,
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
     marginTop: 12,
-    marginHorizontal: 16,
   },
-  doneTitle: { fontSize: 16, fontWeight: "800", color: "#047857" },
-  doneRow: { fontSize: 13, color: "#065f46", marginTop: 6 },
+  doneTitle: { fontSize: type.subheading, fontWeight: "800", color: "#047857" },
+  doneRow: { fontSize: type.label, color: "#065F46", marginTop: 6 },
   infoCard: {
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
     marginTop: 12,
-    marginHorizontal: 16,
-  },
-  infoRow: { fontSize: 13, color: "#475569", marginTop: 4 },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#334155",
-    marginTop: 18,
-    marginHorizontal: 16,
-  },
-  noPhotos: { fontSize: 13, color: "#94a3b8", marginTop: 8, marginHorizontal: 16 },
-  photoGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    paddingHorizontal: 16,
-    marginTop: 10,
-  },
-  photoThumb: { width: 96, height: 96, borderRadius: 10, backgroundColor: "#e2e8f0" },
-  primaryButton: {
-    backgroundColor: "#2563eb",
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginTop: 20,
-    marginHorizontal: 16,
-  },
-  primaryButtonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  secondaryButton: {
-    backgroundColor: "#fff",
-    borderColor: "#cbd5e1",
     borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 10,
-    marginHorizontal: 16,
+    borderColor: colors.border,
   },
-  secondaryButtonText: { color: "#334155", fontSize: 15, fontWeight: "600" },
-  summaryButton: {
-    backgroundColor: "#10b981",
-    borderRadius: 14,
+  infoRow: { fontSize: type.label, color: "#475569", marginTop: 4 },
+  sectionTitle: { fontSize: type.subheading, fontWeight: "700", color: "#334155", marginTop: 18 },
+  noPhotos: { fontSize: type.label, color: colors.textFaint, marginTop: 8 },
+  photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  photoThumb: {
+    width: Math.min(96, Math.round((720 - spacing.lg * 2 - spacing.sm * 2) / 3)),
+    height: Math.min(96, Math.round((720 - spacing.lg * 2 - spacing.sm * 2) / 3)),
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+  },
+  primaryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.brand,
+    borderRadius: radius.lg,
     paddingVertical: 16,
-    alignItems: "center",
-    marginTop: 10,
-    marginHorizontal: 16,
+    marginTop: 20,
+    ...shadows.glow,
   },
-  summaryButtonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  errorText: { color: "#ef4444", fontSize: 15, fontWeight: "600", textAlign: "center", paddingHorizontal: 24 },
+  primaryButtonText: { color: "#fff", fontSize: type.subheading, fontWeight: "700" },
+  summaryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.success,
+    borderRadius: radius.lg,
+    paddingVertical: 16,
+    marginTop: 10,
+  },
+  summaryButtonText: { color: "#fff", fontSize: type.subheading, fontWeight: "700" },
+  errorText: { color: colors.danger, fontSize: type.body, fontWeight: "600", textAlign: "center", paddingHorizontal: 24 },
   retryButton: {
-    backgroundColor: "#2563eb",
-    borderRadius: 12,
+    backgroundColor: colors.brand,
+    borderRadius: radius.md,
     paddingHorizontal: 28,
     paddingVertical: 10,
     marginTop: 14,
   },
-  retryButtonText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  previewOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.92)",
-    paddingTop: 50,
-    paddingBottom: 30,
-  },
-  previewTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    marginBottom: 10,
-  },
-  previewClose: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  previewDelete: { color: "#f87171", fontSize: 16, fontWeight: "600" },
+  retryButtonText: { color: "#fff", fontSize: type.body, fontWeight: "700" },
+  previewOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.94)", paddingTop: 54, paddingBottom: 30 },
+  previewTop: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 20, marginBottom: 10 },
+  previewClose: { color: "#fff", fontSize: type.body, fontWeight: "600" },
+  previewDelete: { color: colors.dangerLight, fontSize: type.body, fontWeight: "600" },
   previewImage: { flex: 1 },
-  previewCaption: { color: "#94a3b8", fontSize: 12, textAlign: "center", marginTop: 8 },
+  previewCaption: { color: colors.textMuted, fontSize: type.small, textAlign: "center", marginTop: 8 },
 });

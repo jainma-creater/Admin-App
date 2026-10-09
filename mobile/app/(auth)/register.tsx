@@ -16,6 +16,7 @@ import { BrandLogo } from "../../components/BrandLogo";
 import { FormField, PrimaryButton, Chip, LinkText } from "../../components/ui";
 import { SelectField, SelectOption } from "../../components/SelectField";
 import { colors, radius, spacing, type, authGradient, shadows } from "../../lib/theme";
+import { useHeaderTop } from "../../lib/safeArea";
 
 type RoleOpt = {
   key: string;
@@ -48,6 +49,7 @@ const DEFAULT_ROLES: RoleOpt[] = [
 export default function Register() {
   const { saveSession } = useAuth();
   const router = useRouter();
+  const headerTop = useHeaderTop();
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -187,7 +189,7 @@ export default function Register() {
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <LinearGradient colors={[...authGradient]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.root}>
         <ScrollView
-          contentContainerStyle={{ paddingBottom: 34, paddingTop: 34 }}
+          contentContainerStyle={{ paddingBottom: 34, paddingTop: headerTop.paddingTop + 12 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -378,7 +380,7 @@ const styles = {
   },
   nameRow: { flexDirection: "row" },
   section: { marginTop: spacing.lg, marginBottom: spacing.sm },
-  sectionTitle: { color: colors.white, fontSize: type.subheading, fontWeight: "800" },
+  sectionTitle: { color: colors.text, fontSize: type.subheading, fontWeight: "800" },
   sectionHint: { color: colors.textMuted, fontSize: type.small, marginTop: 4, marginBottom: 12 },
   chipGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 10 },
   roleDesc: { color: colors.sky, fontSize: type.small, marginTop: 10, fontStyle: "italic" },

@@ -35,13 +35,13 @@ export function BrandLogo({ size = 72, dark = true }: { size?: number; dark?: bo
   );
 }
 
-export function BrandWordmark() {
+export function BrandWordmark({ dark = false }: { dark?: boolean }) {
   return (
     <View style={{ alignItems: "center" }}>
-      <Text style={{ color: colors.white, fontSize: type.heading, fontWeight: "800", letterSpacing: -0.3 }}>
+      <Text style={{ color: dark ? colors.white : colors.text, fontSize: type.heading, fontWeight: "800", letterSpacing: -0.3 }}>
         Branch Visit
       </Text>
-      <Text style={{ color: colors.textMuted, fontSize: type.small, marginTop: 2, letterSpacing: 0.6, textTransform: "uppercase" }}>
+      <Text style={{ color: dark ? colors.textMuted : colors.textMuted, fontSize: type.small, marginTop: 2, letterSpacing: 0.6, textTransform: "uppercase" }}>
         Inspection & Compliance
       </Text>
     </View>
