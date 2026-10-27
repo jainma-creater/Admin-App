@@ -6,7 +6,7 @@ import { create } from "zustand";
 type AuthState = {
   user: any | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, captcha?: { token?: string; honeypot?: string }) => Promise<void>;
   saveSession: (tokens: { access_token: string; refresh_token: string }) => Promise<void>;
   logout: () => Promise<void>;
   loadSession: () => Promise<void>;
@@ -30,8 +30,13 @@ export const useAuth = create<AuthState>((set) => ({
   user: null,
   isLoading: true,
 
-  login: async (email: string, password: string) => {
-    const { data } = await api.post("/auth/login", { email, password });
+  login: async (email: string, password: string, captcha?: { token?: string; honeypot?: string }) => {
+    const { data } = await api.post("/auth/login", {
+      email,
+      password,
+      captcha_token: captcha?.token,
+      honeypot: captcha?.honeypot,
+    });
     await storeSession(set, data);
   },
 

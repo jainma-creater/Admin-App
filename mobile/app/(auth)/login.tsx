@@ -13,7 +13,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../stores/auth";
-import { getErrorMessage } from "../../lib/api";
+import { api, getErrorMessage } from "../../lib/api";
 import { BrandLogo, BrandWordmark } from "../../components/BrandLogo";
 import { FormField, PrimaryButton, LinkText } from "../../components/ui";
 import { colors, radius, spacing, type, authGradient, shadows } from "../../lib/theme";
@@ -24,8 +24,26 @@ export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+const [error, setError] = useState<string | null>(null);
+const [loading, setLoading] = useState(false);
+const [captcha, setCaptcha] = useState<{ token: string } | null>(null);
+
+const fetchCaptcha = async () => {
+  try {
+    const { data } = await api.get("/auth/captcha");
+    if (data.captcha === "disabled") {
+      setCaptcha(null);
+      return;
+    }
+    setCaptcha({ token: data.token });
+  } catch {
+    setCaptcha(null); // fail open: if captcha endpoint is down, still allow login
+  }
+};
+
+useEffect(() => {
+  fetchCaptcha();
+}, []);
 
   const { width: SCREEN_WIDTH } = useWindowDimensions();
   const entrance = useRef(new Animated.Value(0)).current;
@@ -49,10 +67,18 @@ export default function Login() {
     setError(null);
     setLoading(true);
     try {
-      await login(email.trim(), password);
+      await login(email.trim(), password, {
+        token: captcha?.token,
+        honeypot: "",
+      });
       router.replace("/(app)");
     } catch (e: any) {
-      setError(await getErrorMessage(e));
+      const msg = await getErrorMessage(e);
+      setError(msg);
+      // CAPTCHA is one-time-use: refresh it so the next attempt works.
+      if (captcha) {
+        await fetchCaptcha();
+      }
     } finally {
       setLoading(false);
     }

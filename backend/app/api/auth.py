@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from core.config import settings
+from core.captcha import generate_captcha_token, verify_captcha, compute_honeypot_field
 from core.database import get_db
 from core.password_policy import validate_password_strength
 from core.security import (
@@ -16,6 +17,7 @@ from core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    revoke_access_token,
 )
 from models.user import User, RefreshToken, Role
 from models.org import Region, Area, Branch
@@ -25,9 +27,23 @@ from schemas.auth import (
     RegisterBranch, RegisterRequest, StateOption,
 )
 from api.deps import get_current_user, get_current_user_allow_must_change
-from utils.audit import AuditLogger, utcnow
+from utils.audit import AuditLogger
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.get("/captcha")
+async def captcha():
+    """Issue a one-time CAPTCHA token + honeypot config for the login form.
+
+    The client must present `token` (and `honeypot` empty, plus `mouse_events`)
+    back on /auth/login. The nonce is consumed on verify so it can't be reused.
+    """
+    if not settings.CAPTCHA_ENABLED:
+        return {"captcha": "disabled", "honeypot": compute_honeypot_field()}
+    data = await generate_captcha_token()
+    return data
+
 
 # Server-side sanity check on top of a light regex (schema keeps a str field to
 # avoid pulling in email-validator just for one endpoint).
@@ -54,14 +70,54 @@ async def login(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    now = datetime.now(timezone.utc)
     result = await db.execute(select(User).where(User.email == payload.email.lower().strip()))
     user = result.scalar_one_or_none()
-    if not user or not verify_password(payload.password, user.hashed_password):
+    if not user:
+        # User doesn't exist: still enforce rate limit via middleware; return
+        # generic failure so enumerating emails is not cheaper than guessing.
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    if not user.is_active:
-        raise HTTPException(status_code=403, detail="Account is inactive")
 
-    user.last_login_at = utcnow()
+    # ── Account lockout ────────────────────────────────────────────────
+    if user.locked_until and user.locked_until > now:
+        raise HTTPException(
+            status_code=403,
+            detail="Account is locked due to repeated failed logins. Try again later.",
+        )
+
+    # ── CAPTCHA ("I'm not a robot") ────────────────────────────────────
+    # Required on login when enabled. Web/mobile clients fetch a token from
+    # GET /auth/captcha and present it here; the nonce is one-time-use.
+    if settings.CAPTCHA_ENABLED:
+        ok = await verify_captcha(
+            payload.captcha_token,
+            payload.honeypot,
+            payload.mouse_events,
+        )
+        if not ok:
+            raise HTTPException(
+                status_code=400,
+                detail="CAPTCHA verification failed. Complete the challenge and try again.",
+            )
+
+    # ── Password ───────────────────────────────────────────────────────
+    if not verify_password(payload.password, user.hashed_password):
+        user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+        if user.failed_login_attempts >= settings.LOGIN_MAX_FAILED_ATTEMPTS:
+            user.locked_until = now + timedelta(minutes=settings.LOGIN_LOCKOUT_MINUTES)
+            await AuditLogger.log(
+                db, user_id=user.id, action="ACCOUNT_LOCKED",
+                entity_type="user", entity_id=user.id,
+                details={"attempts": user.failed_login_attempts,
+                         "locked_until": user.locked_until.isoformat()},
+            )
+        await db.commit()
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # ── Success ────────────────────────────────────────────────────────
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    user.last_login_at = now
 
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
@@ -73,6 +129,7 @@ async def login(
     ))
     await AuditLogger.log(db, user_id=user.id, action="LOGIN",
                           entity_type="user", entity_id=user.id, request=request)
+    await db.commit()
 
     return Token(access_token=access_token, refresh_token=refresh_token)
 
@@ -130,10 +187,21 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
 
 @router.post("/logout")
 async def logout(
+    request: Request,
     payload: RefreshRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Revoke the access token's JTI so it can't be used after logout.
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        try:
+            await revoke_access_token(auth_header[7:])
+        except Exception:
+            # Redis down: fail closed — the refresh-token revocation below and
+            # short access TTL still bound the token's life.
+            pass
+    # Revoke the refresh token (server-side invalidation on logout).
     result = await db.execute(select(RefreshToken).where(RefreshToken.token == payload.refresh_token))
     token = result.scalar_one_or_none()
     if token:

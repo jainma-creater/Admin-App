@@ -19,6 +19,10 @@ class TokenPayload(BaseModel):
 class LoginRequest(BaseModel):
     email: str = Field(..., max_length=255)
     password: str = Field(..., min_length=6, max_length=128)
+    # CAPTCHA ("I'm not a robot") — required when CAPTCHA_ENABLED is on.
+    captcha_token: str | None = None
+    honeypot: str | None = None
+    mouse_events: str | None = None
 
 
 class RefreshRequest(BaseModel):

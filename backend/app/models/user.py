@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Table,
     Text,
@@ -66,6 +67,10 @@ class User(UUIDMixin, TimestampMixin, CreatedByMixin, Base):
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Brute-force / account lockout. After LOGIN_MAX_FAILED_ATTEMPTS consecutive
+    # failures the account is locked for LOGIN_LOCKOUT_MINUTES (admin can unlock).
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     region_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("regions.id", ondelete="SET NULL", use_alter=True), nullable=True

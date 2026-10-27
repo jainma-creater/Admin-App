@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
-from core.security import decode_token
+from core.security import decode_token, _is_token_revoked
 from core.database import get_db
 from core.permissions import has_permission, RoleName
 from models.user import User
@@ -40,6 +40,14 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    # Reject revoked (logout/breach) access tokens before touching the DB.
+    jti = payload.get("jti", "")
+    if jti and await _is_token_revoked(jti):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked",
             headers={"WWW-Authenticate": "Bearer"},
         )
     user_id = payload.get("sub")
@@ -164,6 +172,14 @@ async def get_current_user_query(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    # Reject revoked (logout/breach) access tokens before touching the DB.
+    jti = payload.get("jti", "")
+    if jti and await _is_token_revoked(jti):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked",
             headers={"WWW-Authenticate": "Bearer"},
         )
     user_id = payload.get("sub")

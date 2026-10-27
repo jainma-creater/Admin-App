@@ -7,7 +7,7 @@ import { api } from "./api";
 type AuthContextType = {
   user: any | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, captcha?: { token?: string; honeypot?: string; mouse_events?: string }) => Promise<void>;
   logout: () => void;
 };
 
@@ -38,9 +38,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (
+    email: string,
+    password: string,
+    captcha: { token?: string; honeypot?: string; mouse_events?: string } = {},
+  ) => {
     const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-    const { data } = await api.post("/auth/login", { email, password });
+    const { data } = await api.post("/auth/login", {
+      email,
+      password,
+      captcha_token: captcha.token,
+      honeypot: captcha.honeypot,
+      mouse_events: captcha.mouse_events,
+    });
     Cookies.set("access_token", data.access_token, {
       expires: 1 / 24,
       path: "/",

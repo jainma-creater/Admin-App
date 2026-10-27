@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { getErrorMessage } from "@/lib/api";
+import { api } from "@/lib/api";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -14,17 +15,108 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // CAPTCHA state
+  const [captcha, setCaptcha] = useState<{ token: string; honeypot: { name: string; label: string } } | null>(null);
+  const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [captchaError, setCaptchaError] = useState<string | null>(null);
+  const mouseEventsRef = useRef<{ t: number; x: number; y: number }[]>([]);
+  const mouseTrackerRef = useRef<() => void>(() => {});
+
+  // Fetch a fresh CAPTCHA token on mount.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get("/auth/captcha");
+        if (cancelled) return;
+        if (data.captcha === "disabled") {
+          setCaptcha(null);
+          setCaptchaVerified(true); // nothing to solve
+          return;
+        }
+        setCaptcha({ token: data.token, honeypot: data.honeypot });
+      } catch {
+        setCaptcha(null);
+        setCaptchaVerified(true); // fail open so login still works if captcha endpoint is down
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Mouse-movement behavioral proof (only while a captcha challenge is active).
+  useEffect(() => {
+    if (!captcha) {
+      mouseTrackerRef.current = () => {};
+      return;
+    }
+    const onMove = (e: MouseEvent) => {
+      mouseEventsRef.current.push({ t: Date.now(), x: e.clientX, y: e.clientY });
+      // Keep the buffer bounded.
+      if (mouseEventsRef.current.length > 200) {
+        mouseEventsRef.current = mouseEventsRef.current.slice(-200);
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    mouseTrackerRef.current = () => window.removeEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [captcha]);
+
+  const resetCaptcha = useCallback(() => {
+    setCaptchaVerified(false);
+    setCaptchaError(null);
+    mouseEventsRef.current = [];
+    void (async () => {
+      try {
+        const { data } = await api.get("/auth/captcha");
+        if (data.captcha === "disabled") {
+          setCaptcha(null);
+          setCaptchaVerified(true);
+          return;
+        }
+        setCaptcha({ token: data.token, honeypot: data.honeypot });
+      } catch {
+        setCaptcha(null);
+        setCaptchaVerified(true);
+      }
+    })();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setCaptchaError(null);
+
+    // CAPTCHA must be solved before submitting.
+    if (captcha && !captchaVerified) {
+      setCaptchaError("Please complete the \"I'm not a robot\" challenge.");
+      return;
+    }
+
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email, password, {
+        token: captcha?.token ?? undefined,
+        honeypot: "",
+        mouse_events: captcha ? JSON.stringify(mouseEventsRef.current) : undefined,
+      });
       router.replace("/");
     } catch (err: any) {
-      setError(await getErrorMessage(err));
+      const msg = await getErrorMessage(err);
+      setError(msg);
+      // CAPTCHA is one-time-use: on any failure, issue a fresh challenge.
+      if (captcha) {
+        resetCaptcha();
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCaptchaChange = (checked: boolean) => {
+    setCaptchaVerified(checked);
+    setCaptchaError(null);
+    if (checked) {
+      mouseEventsRef.current = [];
     }
   };
 
@@ -50,6 +142,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              autoComplete="email"
             />
           </div>
           <div className="mb-4">
@@ -61,6 +154,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                autoComplete="current-password"
               />
               <button
                 type="button"
@@ -76,16 +170,60 @@ export default function LoginPage() {
                 ) : (
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7z" />
                   </svg>
                 )}
               </button>
             </div>
           </div>
+
+          {/* Honeypot: invisible trap for bots. Real users never see/fill it. */}
+          {captcha && (
+            <div style={{ position: "absolute", left: "-9999px", width: "1px", height: "1px", overflow: "hidden" }}>
+              <label htmlFor={captcha.honeypot.name}>{captcha.honeypot.label}</label>
+              <input
+                id={captcha.honeypot.name}
+                name={captcha.honeypot.name}
+                type="text"
+                tabIndex={-1}
+                autoComplete="off"
+                value=""
+                onChange={() => setCaptchaError("Invalid submission.")}
+              />
+            </div>
+          )}
+
+          {/* CAPTCHA challenge */}
+          {captcha && !captchaVerified && (
+            <div className="mb-4 rounded-lg border border-[#30363d] bg-gh-canvas p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="captcha-checkbox"
+                  checked={captchaVerified}
+                  onChange={(e) => handleCaptchaChange(e.target.checked)}
+                  className="rounded text-[#2f81f7] focus:ring-[#2f81f7]"
+                  required
+                />
+                <label htmlFor="captcha-checkbox" className="text-sm text-gh-text cursor-pointer select-none">
+                  I\u2019m not a robot
+                </label>
+              </div>
+              {captchaError && <p className="text-[#f85149] text-xs mb-2">{captchaError}</p>}
+              <button
+                type="button"
+                onClick={resetCaptcha}
+                className="text-xs text-[#2f81f7] underline underline-offset-4 hover:text-[#1f6feb]"
+              >
+                Refresh challenge
+              </button>
+            </div>
+          )}
+
           {error && <p className="text-[#f85149] text-sm mb-3">{error}</p>}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || (captcha && !captchaVerified)}
             className="w-full bg-[#2f81f7] hover:bg-[#1f6feb] text-white rounded-lg py-2.5 text-sm font-semibold disabled:opacity-50"
           >
             {loading ? "Signing in..." : "Sign In"}

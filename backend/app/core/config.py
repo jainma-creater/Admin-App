@@ -31,10 +31,19 @@ class Settings(BaseSettings):
 
     # Rate limiting (Redis-backed; per-process memory fallback when Redis is down).
     RATE_LIMIT_ENABLED: bool = True
-    RATE_LIMIT_LOGIN_PER_MINUTE: int = 600
-    RATE_LIMIT_REGISTER_PER_HOUR: int = 600
-    RATE_LIMIT_REFRESH_PER_MINUTE: int = 1200
-    RATE_LIMIT_API_PER_MINUTE: int = 100000
+    RATE_LIMIT_LOGIN_PER_MINUTE: int = 5
+    RATE_LIMIT_REGISTER_PER_HOUR: int = 10
+    RATE_LIMIT_REFRESH_PER_MINUTE: int = 20
+    RATE_LIMIT_API_PER_MINUTE: int = 3000
+
+    # CAPTCHA ("I'm not a robot") on login — blocks automated brute-force.
+    CAPTCHA_ENABLED: bool = True
+    CAPTCHA_MIN_DELAY_SECONDS: float = 1.5
+    CAPTCHA_TTL_SECONDS: int = 300
+
+    # Account lockout after repeated failed logins.
+    LOGIN_MAX_FAILED_ATTEMPTS: int = 3
+    LOGIN_LOCKOUT_MINUTES: int = 30
 
     MINIO_ENDPOINT: str = "localhost:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"
