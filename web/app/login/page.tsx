@@ -223,7 +223,7 @@ export default function LoginPage() {
           {error && <p className="text-[#f85149] text-sm mb-3">{error}</p>}
           <button
             type="submit"
-            disabled={loading || (captcha && !captchaVerified)}
+            disabled={loading || (!!captcha && !captchaVerified)}
             className="w-full bg-[#2f81f7] hover:bg-[#1f6feb] text-white rounded-lg py-2.5 text-sm font-semibold disabled:opacity-50"
           >
             {loading ? "Signing in..." : "Sign In"}
