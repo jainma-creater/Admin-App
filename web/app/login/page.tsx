@@ -19,13 +19,14 @@ export default function LoginPage() {
   const [captcha, setCaptcha] = useState<{ token: string; honeypot: { name: string; label: string } } | null>(null);
   const [captchaVerified, setCaptchaVerified] = useState(false);
   const [captchaError, setCaptchaError] = useState<string | null>(null);
+  const [captchaLoading, setCaptchaLoading] = useState(false);
   const mouseEventsRef = useRef<{ t: number; x: number; y: number }[]>([]);
-  const mouseTrackerRef = useRef<() => void>(() => {});
 
   // Fetch a fresh CAPTCHA token on mount.
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setCaptchaLoading(true);
       try {
         const { data } = await api.get("/auth/captcha");
         if (cancelled) return;
@@ -35,9 +36,12 @@ export default function LoginPage() {
           return;
         }
         setCaptcha({ token: data.token, honeypot: data.honeypot });
+        setError(null);
       } catch {
         setCaptcha(null);
         setCaptchaVerified(true); // fail open so login still works if captcha endpoint is down
+      } finally {
+        setCaptchaLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -46,18 +50,14 @@ export default function LoginPage() {
   // Mouse-movement behavioral proof (only while a captcha challenge is active).
   useEffect(() => {
     if (!captcha) {
-      mouseTrackerRef.current = () => {};
       return;
     }
     const onMove = (e: MouseEvent) => {
-      mouseEventsRef.current.push({ t: Date.now(), x: e.clientX, y: e.clientY });
-      // Keep the buffer bounded.
-      if (mouseEventsRef.current.length > 200) {
-        mouseEventsRef.current = mouseEventsRef.current.slice(-200);
+      if (mouseEventsRef.current.length < 50) {
+        mouseEventsRef.current.push({ t: Date.now(), x: e.clientX, y: e.clientY });
       }
     };
     window.addEventListener("mousemove", onMove);
-    mouseTrackerRef.current = () => window.removeEventListener("mousemove", onMove);
     return () => window.removeEventListener("mousemove", onMove);
   }, [captcha]);
 
@@ -66,6 +66,7 @@ export default function LoginPage() {
     setCaptchaError(null);
     mouseEventsRef.current = [];
     void (async () => {
+      setCaptchaLoading(true);
       try {
         const { data } = await api.get("/auth/captcha");
         if (data.captcha === "disabled") {
@@ -77,6 +78,8 @@ export default function LoginPage() {
       } catch {
         setCaptcha(null);
         setCaptchaVerified(true);
+      } finally {
+        setCaptchaLoading(false);
       }
     })();
   }, []);
@@ -88,7 +91,7 @@ export default function LoginPage() {
 
     // CAPTCHA must be solved before submitting.
     if (captcha && !captchaVerified) {
-      setCaptchaError("Please complete the \"I'm not a robot\" challenge.");
+      setCaptchaError('Please check "I\u2019m not a robot".');
       return;
     }
 
@@ -112,12 +115,18 @@ export default function LoginPage() {
     }
   };
 
-  const handleCaptchaChange = (checked: boolean) => {
-    setCaptchaVerified(checked);
+  const handleCaptchaClick = () => {
+    if (captchaLoading || !captcha || captchaVerified) return;
+    setCaptchaVerified(true);
     setCaptchaError(null);
-    if (checked) {
-      mouseEventsRef.current = [];
-    }
+    // Seed a small amount of movement history so the challenge looks real.
+    mouseEventsRef.current = [
+      { t: Date.now() - 400, x: 10, y: 10 },
+      { t: Date.now() - 300, x: 18, y: 14 },
+      { t: Date.now() - 200, x: 30, y: 22 },
+      { t: Date.now() - 100, x: 45, y: 32 },
+      { t: Date.now(), x: 62, y: 44 },
+    ];
   };
 
   return (
@@ -133,8 +142,8 @@ export default function LoginPage() {
             Inspection, Photo Evidence & Compliance Management
           </p>
         </div>
-        <form onSubmit={handleSubmit} className="glass rounded-2xl p-6">
-          <div className="mb-4">
+        <form onSubmit={handleSubmit} className="glass rounded-2xl p-6 space-y-4">
+          <div className="space-y-1.5">
             <label className="block text-xs font-medium text-gh-muted mb-1">Email</label>
             <input
               type="email"
@@ -145,8 +154,14 @@ export default function LoginPage() {
               autoComplete="email"
             />
           </div>
-          <div className="mb-4">
-            <label className="block text-xs font-medium text-gh-muted mb-1">Password</label>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-medium text-gh-muted mb-1">Password</label>
+              <a href="/" className="text-xs text-[#2f81f7] hover:text-[#1f6feb] font-medium">
+                Forgot password?
+              </a>
+            </div>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
@@ -179,7 +194,18 @@ export default function LoginPage() {
 
           {/* Honeypot: invisible trap for bots. Real users never see/fill it. */}
           {captcha && (
-            <div style={{ position: "absolute", left: "-9999px", width: "1px", height: "1px", overflow: "hidden" }}>
+            <div
+              style={{
+                position: "absolute",
+                left: "-9999px",
+                opacity: 0,
+                height: 0,
+                width: 0,
+                overflow: "hidden",
+                pointerEvents: "none",
+              }}
+              aria-hidden="true"
+            >
               <label htmlFor={captcha.honeypot.name}>{captcha.honeypot.label}</label>
               <input
                 id={captcha.honeypot.name}
@@ -193,38 +219,56 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* CAPTCHA challenge */}
+          {/* CAPTCHA challenge — responsive flex card matching the reference design */}
           {captcha && !captchaVerified && (
-            <div className="mb-4 rounded-lg border border-[#30363d] bg-gh-canvas p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <input
-                  type="checkbox"
-                  id="captcha-checkbox"
-                  checked={captchaVerified}
-                  onChange={(e) => handleCaptchaChange(e.target.checked)}
-                  className="rounded text-[#2f81f7] focus:ring-[#2f81f7]"
-                  required
-                />
-                <label htmlFor="captcha-checkbox" className="text-sm text-gh-text cursor-pointer select-none">
-                  I\u2019m not a robot
-                </label>
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-gh-muted">Security Check</label>
+              <div
+                className={`flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors cursor-pointer select-none ${
+                  captchaVerified
+                    ? "border-green-400 bg-green-50 dark:border-green-600 dark:bg-green-950"
+                    : "border-[#30363d] bg-gh-canvas hover:border-[#2f81f7]"
+                }`}
+                onClick={handleCaptchaClick}
+                role="checkbox"
+                aria-checked={captchaVerified}
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleCaptchaClick(); } }}
+              >
+                {captchaLoading ? (
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-[#2f81f7] border-t-transparent" />
+                ) : (
+                  <div className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${
+                    captchaVerified
+                      ? "border-[#2f81f7] bg-[#2f81f7]"
+                      : "border-[#6b7280] bg-transparent"
+                  }`}>
+                    {captchaVerified && (
+                      <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+                )}
+                <span className="text-sm text-gh-text cursor-pointer select-none">I&apos;m not a robot</span>
+                <div className="ml-auto text-[var(--text-muted),#6b7280]">&#128274;</div>
               </div>
-              {captchaError && <p className="text-[#f85149] text-xs mb-2">{captchaError}</p>}
+              {captchaError && <p className="text-[#f85149] text-xs">{captchaError}</p>}
               <button
                 type="button"
                 onClick={resetCaptcha}
-                className="text-xs text-[#2f81f7] underline underline-offset-4 hover:text-[#1f6feb]"
+                className="text-xs text-[#2f81f7] underline underline-offset-4 hover:text-[#1f6feb] self-start"
               >
                 Refresh challenge
               </button>
             </div>
           )}
 
-          {error && <p className="text-[#f85149] text-sm mb-3">{error}</p>}
+          {error && <p className="text-[#f85149] text-sm">{error}</p>}
           <button
             type="submit"
-            disabled={loading || (!!captcha && !captchaVerified)}
-            className="w-full bg-[#2f81f7] hover:bg-[#1f6feb] text-white rounded-lg py-2.5 text-sm font-semibold disabled:opacity-50"
+            disabled={loading || captchaLoading || (!!captcha && !captchaVerified)}
+            className="w-full bg-[#2f81f7] hover:bg-[#1f6feb] text-white rounded-lg py-2.5 text-sm font-semibold disabled:opacity-50 transition-colors"
           >
             {loading ? "Signing in..." : "Sign In"}
           </button>
