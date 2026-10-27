@@ -219,8 +219,8 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* CAPTCHA challenge — responsive flex card matching the reference design */}
-          {captcha && !captchaVerified && (
+          {/* CAPTCHA challenge — always visible; shows checked state after click */}
+          {captcha && (
             <div className="space-y-1.5">
               <label className="block text-xs font-medium text-gh-muted">Security Check</label>
               <div
@@ -254,13 +254,15 @@ export default function LoginPage() {
                 <div className="ml-auto text-[var(--text-muted),#6b7280]">&#128274;</div>
               </div>
               {captchaError && <p className="text-[#f85149] text-xs">{captchaError}</p>}
-              <button
-                type="button"
-                onClick={resetCaptcha}
-                className="text-xs text-[#2f81f7] underline underline-offset-4 hover:text-[#1f6feb] self-start"
-              >
-                Refresh challenge
-              </button>
+              {captchaVerified && (
+                <button
+                  type="button"
+                  onClick={resetCaptcha}
+                  className="text-xs text-[#2f81f7] underline underline-offset-4 hover:text-[#1f6feb] self-start"
+                >
+                  Refresh challenge
+                </button>
+              )}
             </div>
           )}
 
